@@ -311,8 +311,8 @@ static void frskyX_data_frame() {
 
     packet[21] = seq_rx_expected << 4 | seq_tx_send;
 
-    chan_offset ^= 0x08;
-
+    //chan_offset ^= 0x08;
+asdf;
     memset(&packet[22], 0, packet_size-24);
 
     u16 lcrc = crc(&packet[3], packet_size-5);
