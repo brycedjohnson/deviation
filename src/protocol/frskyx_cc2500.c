@@ -24,6 +24,7 @@
 #include "config/model.h"
 #include "config/tx.h"
 #include "telemetry.h"
+#include "devo.h"
 
 #ifdef MODULAR
   //Some versions of gcc applythis to definitions, others to calls
@@ -284,6 +285,10 @@ static void frskyX_data_frame() {
     // 10, 12, 14, 16, 18, 1A, 1C, 1E - failsafe packet
     packet[7] = 0;    // may be replaced by failsafe below
     packet[8] = 0;
+
+    //FRSKY latency hack
+    ADC_Filter();
+    MIXER_CalcChannels();
 
     startChan = chan_offset;
 
