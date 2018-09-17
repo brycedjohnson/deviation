@@ -39,7 +39,7 @@
 #include "iface_cc2500.h"
 
 
-static const char * const frskyx_opts[] = {
+static const char * const redpine_opts[] = {
   _tr_noop("AD2GAIN"),  "0", "2000", "655361", NULL,       // big step 10, little step 1
   _tr_noop("Freq-Fine"),  "-127", "127", NULL,
   _tr_noop("Format"),  "Fast", "Slow", NULL,
@@ -166,7 +166,7 @@ static void set_start(u8 ch) {
 }
 
 #define RXNUM 16
-static void frskyX_build_bind_packet()
+static void redpine_build_bind_packet()
 {
     u8 packet_size_bind = 33;
 
@@ -234,7 +234,7 @@ enum {
     CHANNEL16
 };
 
-static void frskyX_data_frame() {
+static void redpine_data_frame() {
     //0x1D 0xB3 0xFD 0x02 0x56 0x07 0x15 0x00 0x00 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x08 0x00 0x00 0x00 0x00 0x00 0x00 0x96 0x12
     // channel packing: H (0)7-4, L (0)3-0; H (1)3-0, L (0)11-8; H (1)11-8, L (1)7-4 etc
 
@@ -251,21 +251,18 @@ static void frskyX_data_frame() {
     packet[1] = fixed_id;
     packet[2] = fixed_id >> 8;
 
-    packet[3] = (ctr << 6) + channr;  //*64
-    packet[4] = counter_rst;
-
     chan[0] = scaleForPXX(0);
     chan[1] = scaleForPXX(1);
     chan[2] = scaleForPXX(2);
     chan[3] = scaleForPXX(3);
 
-    packet[5]   = chan[0];
-    packet[6] = (((chan[0] >> 8) & 0x07) | (chan[1] << 4)) | GET_FLAG(CHANNEL5, 0x08);
-    packet[7] = ((chan[1] >> 4) & 0x7F) | GET_FLAG(CHANNEL6, 0x80);
-    packet[8]   = chan[2];
-    packet[9] = (((chan[2] >> 8) & 0x07) | (chan[3] << 4))  | GET_FLAG(CHANNEL7, 0x08); 
-    packet[10] = ((chan[3] >> 4) & 0x7F) | GET_FLAG(CHANNEL8, 0x80);
-    packet[11] = GET_FLAG(CHANNEL9, 0x01)
+    packet[3]   = chan[0];
+    packet[4] = (((chan[0] >> 8) & 0x07) | (chan[1] << 4)) | GET_FLAG(CHANNEL5, 0x08);
+    packet[5] = ((chan[1] >> 4) & 0x7F) | GET_FLAG(CHANNEL6, 0x80);
+    packet[6]   = chan[2];
+    packet[7] = (((chan[2] >> 8) & 0x07) | (chan[3] << 4))  | GET_FLAG(CHANNEL7, 0x08); 
+    packet[8] = ((chan[3] >> 4) & 0x7F) | GET_FLAG(CHANNEL8, 0x80);
+    packet[9] = GET_FLAG(CHANNEL9, 0x01)
             | GET_FLAG(CHANNEL10, 0x02)
             | GET_FLAG(CHANNEL11, 0x04)
             | GET_FLAG(CHANNEL12, 0x08)
@@ -274,43 +271,13 @@ static void frskyX_data_frame() {
             | GET_FLAG(CHANNEL15, 0x40)
             | GET_FLAG(CHANNEL16, 0x80);
             
-    u16 lcrc = crc(&packet[0], 11);
-    packet[12] = lcrc >> 8;
-    packet[13] = lcrc;
+    u16 lcrc = crc(&packet[0], 10);
+    packet[10] = lcrc >> 8;
+    packet[11] = lcrc;
 
 }
 
-
-
-#ifdef EMULATOR
-// for emulation to match fixed_id set tx fixed id to 123456 and add
-// txid=F6C4FBB3 to top of hardware.ini
-static u8 telem_idx;
-static const u8 telem_test[][17] = {
-{0x0e, 0x20, 0xe6, 0x02, 0x2d, 0x88, 0x00, 0x00, 0x00, 0x00, 0x10, 0x01, 0xd3, 0xba, 0x56, 0xc4, 0x28},
-{0x0e, 0x20, 0xe6, 0x02, 0xa7, 0x10, 0x06, 0x7e, 0x1a, 0x10, 0x10, 0x01, 0x2d, 0x7f, 0x18, 0xea, 0x48},
-{0x0e, 0x20, 0xe6, 0x02, 0x2d, 0x21, 0x06, 0xff, 0xff, 0xff, 0x7e, 0x1a, 0x10, 0x91, 0xbb, 0xe4, 0xb3},
-{0x0e, 0x20, 0xe6, 0x02, 0xbf, 0x32, 0x06, 0x03, 0xf1, 0xd3, 0x00, 0x00, 0x00, 0x8e, 0xad, 0xca, 0xd3},
-{0x0e, 0x20, 0xe6, 0x02, 0x2d, 0x03, 0x06, 0x7e, 0x1a, 0x10, 0x10, 0x01, 0xd3, 0x25, 0xc3, 0xe5, 0x2a},
-{0x0e, 0x20, 0xe6, 0x02, 0xcb, 0x10, 0x06, 0x00, 0x00, 0x00, 0x7e, 0x1a, 0x10, 0x6a, 0x1a, 0xb3, 0xb5},
-{0x0e, 0x20, 0xe6, 0x02, 0x2d, 0x21, 0x06, 0x10, 0x01, 0xd3, 0x00, 0x00, 0x00, 0xc9, 0x10, 0x58, 0x0e},
-{0x0e, 0x20, 0xe6, 0x02, 0xd0, 0x32, 0x06, 0x7e, 0x1a, 0x10, 0x03, 0x01, 0xd3, 0xd9, 0x44, 0x7a, 0xd1},
-{0x0e, 0x20, 0xe6, 0x02, 0x2d, 0x03, 0x06, 0x00, 0x00, 0x00, 0x7e, 0x1a, 0x10, 0xb1, 0x20, 0xe1, 0xff},
-{0x0e, 0x20, 0xe6, 0x02, 0xd5, 0x10, 0x06, 0x10, 0x01, 0xd3, 0x00, 0x00, 0x00, 0x8c, 0xc9, 0xc0, 0x26},
-{0x0e, 0x20, 0xe6, 0x02, 0x2d, 0x21, 0x06, 0x7e, 0x1a, 0x10, 0x28, 0x00, 0x05, 0x05, 0x58, 0x90, 0x3c},
-{0x0e, 0x20, 0xe6, 0x02, 0xd7, 0x32, 0x06, 0x00, 0x00, 0x00, 0x7e, 0x1a, 0x10, 0xc6, 0x72, 0x05, 0x3c},
-{0x0e, 0x20, 0xe6, 0x02, 0x2d, 0x03, 0x06, 0x10, 0x01, 0xd2, 0x00, 0x00, 0x00, 0xa9, 0x8b, 0x08, 0xcf},
-{0x0e, 0x20, 0xe6, 0x02, 0xda, 0x10, 0x06, 0x7e, 0x1a, 0x10, 0x10, 0x01, 0xd3, 0x02, 0x6a, 0x58, 0x0e},
-{0x0e, 0x20, 0xe6, 0x02, 0x2d, 0x21, 0x06, 0x00, 0x00, 0x00, 0x7e, 0x1a, 0x10, 0x91, 0xbb, 0x7a, 0xd1},
-{0x0e, 0x20, 0xe6, 0x02, 0xdb, 0x32, 0x06, 0x10, 0x01, 0xd3, 0x00, 0x00, 0x00, 0xc6, 0x72, 0xe1, 0xff},
-{0x0e, 0x20, 0xe6, 0x02, 0x2d, 0x03, 0x06, 0x7e, 0x1a, 0x10, 0x10, 0x01, 0xd3, 0x25, 0xc3, 0xc0, 0x26},
-{0x0e, 0x20, 0xe6, 0x02, 0xda, 0x10, 0x06, 0x00, 0x00, 0x00, 0x7e, 0x1a, 0x10, 0x96, 0x89, 0x90, 0x3c},
-{0x0e, 0x20, 0xe6, 0x02, 0x2d, 0x21, 0x06, 0x10, 0x01, 0xd3, 0x00, 0x00, 0x00, 0xc9, 0x10, 0x05, 0x3c},
-};
-#endif
-
-
-static u16 frskyx_cb() {
+static u16 redpine_cb() {
   u8 len;
 
   switch(state) {
@@ -318,7 +285,7 @@ static u16 frskyx_cb() {
       set_start(47);
       CC2500_SetPower(Model.tx_power);
       CC2500_Strobe(CC2500_SFRX);
-      frskyX_build_bind_packet();
+      redpine_build_bind_packet();
       CC2500_Strobe(CC2500_SIDLE);
       CC2500_WriteData(packet, packet[0]+1);
       state++;
@@ -342,7 +309,7 @@ static u16 frskyx_cb() {
       set_start(channr);
       CC2500_SetPower(Model.tx_power);
       CC2500_Strobe(CC2500_SFRX);
-      frskyX_data_frame();
+      redpine_data_frame();
       CC2500_Strobe(CC2500_SIDLE);
       CC2500_WriteData(packet, packet[0]+1);
       channr = (channr + chanskip) % 47;
@@ -351,45 +318,6 @@ static u16 frskyx_cb() {
       return (Model.proto_opts[PROTO_OPTS_LOOPTIME]*100);
 #else
       return 42;
-#endif
-    case FRSKY_DATA2:
-      //CC2500_SetTxRxMode(RX_EN);
-      CC2500_Strobe(CC2500_SIDLE);
-      state++;
-#ifndef EMULATOR
-      return 200;
-#else
-      return 2;
-#endif
-    case FRSKY_DATA3:
-      CC2500_Strobe(CC2500_SRX);
-      state++;
-#ifndef EMULATOR
-      return 1100;
-#else
-      return 21;
-#endif
-    case FRSKY_DATA4:
-      len = CC2500_ReadReg(CC2500_3B_RXBYTES | CC2500_READ_BURST) & 0x7F;
-#ifndef EMULATOR
-      if (len && len < MAX_PACKET_SIZE) {
-          CC2500_ReadData(packet, len);
-          //frsky_check_telemetry(packet, len);
-      }
-#else
-      (void)len;
-      memcpy(packet, &telem_test[telem_idx], sizeof(telem_test[0]));
-      telem_idx = (telem_idx + 1) % (sizeof(telem_test)/sizeof(telem_test[0]));
-      packet[1] = fixed_id & 0xff;
-      packet[2] = fixed_id >> 8;
-      frsky_check_telemetry(packet, sizeof(telem_test[0]));
-#endif
-      if (seq_tx_send != 8) seq_tx_send = (seq_tx_send + 1) % 4;
-      state = FRSKY_DATA1;
-#ifndef EMULATOR
-      return 500;
-#else
-      return 5;
 #endif
   }
   return 1;
@@ -439,7 +367,7 @@ static const u8 init_data_shared[][2] = {
     {CC2500_09_ADDR,      0x00},
 };
 
-static void frskyX_init() {
+static void redpine_init() {
   CC2500_Reset();
 
   u8 format = Model.proto_opts[PROTO_OPTS_FORMAT] + 1;
@@ -496,14 +424,14 @@ static void initialize(int bind)
     fine = Model.proto_opts[PROTO_OPTS_FREQFINE];
     fixed_id = (u16) get_tx_id();
     channr = 0;
-    chanskip = 1;
+    chanskip = 1; //get_tx_id()
     ctr = 0;
     seq_rx_expected = 0;
     seq_tx_send = 8;
 
     u32 seed = get_tx_id();
 
-    frskyX_init();
+    redpine_init();
     CC2500_SetTxRxMode(TX_EN);  // enable PA
 
     if (bind) {
@@ -516,9 +444,9 @@ static void initialize(int bind)
     }
 
 #ifndef EMULATOR
-    CLOCK_StartTimer(10000, frskyx_cb);
+    CLOCK_StartTimer(10000, redpine_cb);
 #else
-    CLOCK_StartTimer(100, frskyx_cb);
+    CLOCK_StartTimer(100, redpine_cb);
 #endif
 }
 
@@ -534,7 +462,7 @@ const void *REDPINE_Cmds(enum ProtoCmds cmd)
         case PROTOCMD_GETOPTIONS:
             if (!Model.proto_opts[PROTO_OPTS_AD2GAIN]) Model.proto_opts[PROTO_OPTS_AD2GAIN] = 100;  // if not set, default to no gain
             if (!Model.proto_opts[PROTO_OPTS_LOOPTIME]) Model.proto_opts[PROTO_OPTS_LOOPTIME] = 15;  // if not set, default to no gain
-            return frskyx_opts;
+            return redpine_opts;
         case PROTOCMD_TELEMETRYSTATE:
             return (void *)1L;
         case PROTOCMD_TELEMETRYTYPE:
