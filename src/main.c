@@ -199,6 +199,7 @@ void Banner()
 
 void medium_priority_cb()
 {
+    ADC_Filter();
 #ifdef TIMING_DEBUG
     debug_timing(3, 0);
 #endif

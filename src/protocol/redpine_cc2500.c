@@ -43,8 +43,8 @@ static const char * const redpine_opts[] = {
   _tr_noop("AD2GAIN"),  "0", "2000", "655361", NULL,       // big step 10, little step 1
   _tr_noop("Freq-Fine"),  "-127", "127", NULL,
   _tr_noop("Format"),  "Fast", "Slow", NULL,
-  _tr_noop("LoopIn.1ms"),  "0", "100", NULL,
-  _tr_noop("PacketSize"),  "10", "100", NULL,
+  _tr_noop("LoopIn.1ms"),  "1", "100", NULL,
+  _tr_noop("PacketSize"),  "14", "100", NULL,
   NULL
 };
 enum {
@@ -168,9 +168,9 @@ static void set_start(u8 ch) {
 #define RXNUM 16
 static void redpine_build_bind_packet()
 {
-    u8 packet_size_bind = 33;
+    u8 packet_size_bind = 30;
 
-    packet[0] = 0x20;
+    packet[0] = 29;
     packet[1] = 0x03;
     packet[2] = 0x01;
 
@@ -241,8 +241,8 @@ static void redpine_data_frame() {
     u16 chan[4];
     //static u8 failsafe_chan;
 
-    ADC_Filter();
-    MIXER_CalcChannels();
+    //ADC_Filter();
+    //MIXER_CalcChannels();
     packet_size = Model.proto_opts[PROTO_OPTS_PACKETSIZE];
 
     memset(&packet[0], 0, packet_size);
@@ -271,9 +271,12 @@ static void redpine_data_frame() {
             | GET_FLAG(CHANNEL15, 0x40)
             | GET_FLAG(CHANNEL16, 0x80);
             
-    u16 lcrc = crc(&packet[0], 10);
-    packet[10] = lcrc >> 8;
-    packet[11] = lcrc;
+    packet[10] = Model.proto_opts[PROTO_OPTS_LOOPTIME]; 
+    packet[11] = 0;
+
+    u16 lcrc = crc(&packet[0], 12);
+    packet[12] = lcrc >> 8;
+    packet[13] = lcrc;
 
 }
 
@@ -317,13 +320,13 @@ static u16 redpine_cb() {
 #ifndef EMULATOR
       return (Model.proto_opts[PROTO_OPTS_LOOPTIME]*100);
 #else
-      return 42;
+      return Model.proto_opts[PROTO_OPTS_LOOPTIME];
 #endif
   }
   return 1;
 }
 
-// register, FCC, EU
+// register, fast 250k, slow
 static const u8 init_data[][3] = {
     {CC2500_02_IOCFG0,    0x06,  0x06},
     {CC2500_00_IOCFG2,    0x06,  0x06},
