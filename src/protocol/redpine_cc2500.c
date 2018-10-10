@@ -328,35 +328,38 @@ static u16 redpine_cb() {
 
 // register, fast 250k, slow
 static const u8 init_data[][3] = {
-    {CC2500_02_IOCFG0,    0x06,  0x06},
     {CC2500_00_IOCFG2,    0x06,  0x06},
-    {CC2500_17_MCSM1,     0x0c,  0x0E},
-    {CC2500_18_MCSM0,     0x18,  0x18},
+    {CC2500_02_IOCFG0,    0x06,  0x06},    
     {CC2500_06_PKTLEN,    0x1E,  0x23},
     {CC2500_07_PKTCTRL1,  0x04,  0x04},
-    {CC2500_08_PKTCTRL0,  0x01,  0x01},
-    {CC2500_3E_PATABLE,   0xff,  0xff},
+    {CC2500_08_PKTCTRL0,  0x05,  0x01},
     {CC2500_0B_FSCTRL1,   0x0A,  0x08},
     {CC2500_0C_FSCTRL0,   0x00,  0x00},
-    {CC2500_0D_FREQ2,     0x5c,  0x5c},
-    {CC2500_0E_FREQ1,     0x76,  0x80},
-    {CC2500_0F_FREQ0,     0x27,  0x00},
+    {CC2500_0D_FREQ2,     0x5D,  0x5c},
+    {CC2500_0E_FREQ1,     0x93,  0x80},
+    {CC2500_0F_FREQ0,     0xB1,  0x00},
     {CC2500_10_MDMCFG4,   0x2D,  0x7B},
     {CC2500_11_MDMCFG3,   0x3B,  0xF8},
     {CC2500_12_MDMCFG2,   0x73,  0x03},
-    {CC2500_13_MDMCFG1,   0x23,  0x23},
-    {CC2500_14_MDMCFG0,   0x7a,  0x7a},
+    {CC2500_13_MDMCFG1,   0x22,  0x23},
+    {CC2500_14_MDMCFG0,   0xF8,  0x7a},
     {CC2500_15_DEVIATN,   0x00,  0x53},
+    {CC2500_17_MCSM1,     0x0c,  0x0E},
+    {CC2500_18_MCSM0,     0x18,  0x18},
+    {CC2500_3E_PATABLE,   0xff,  0xff},
+
 };
 
 // register, value
 static const u8 init_data_shared[][2] = {
-    {CC2500_19_FOCCFG,    0x16},
-    {CC2500_1A_BSCFG,     0x6c},
-    {CC2500_1B_AGCCTRL2,  0x43},
-    {CC2500_1C_AGCCTRL1,  0x40},
-    {CC2500_1D_AGCCTRL0,  0x91},
-    {CC2500_21_FREND1,    0x56},
+    {CC2500_03_FIFOTHR,   0x07},
+    {CC2500_09_ADDR,      0x00},
+    {CC2500_19_FOCCFG,    0x1D},
+    {CC2500_1A_BSCFG,     0x1C},
+    {CC2500_1B_AGCCTRL2,  0xC7},
+    {CC2500_1C_AGCCTRL1,  0x00},
+    {CC2500_1D_AGCCTRL0,  0xB0},
+    {CC2500_21_FREND1,    0xB6},
     {CC2500_22_FREND0,    0x10},
     {CC2500_23_FSCAL3,    0xa9},
     {CC2500_24_FSCAL2,    0x0A},
@@ -366,8 +369,6 @@ static const u8 init_data_shared[][2] = {
     {CC2500_2C_TEST2,     0x88},
     {CC2500_2D_TEST1,     0x31},
     {CC2500_2E_TEST0,     0x0B},
-    {CC2500_03_FIFOTHR,   0x07},
-    {CC2500_09_ADDR,      0x00},
 };
 
 static void redpine_init() {
