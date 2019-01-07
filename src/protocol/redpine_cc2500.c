@@ -15,7 +15,7 @@
 
 #ifdef MODULAR
   //Allows the linker to properly relocate
-  #define FRSKYX_Cmds PROTO_Cmds
+  #define REDPINE_Cmds PROTO_Cmds
   #pragma long_calls
 #endif
 #include "common.h"
@@ -60,31 +60,23 @@ ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
 #define MAX_PACKET_SIZE 33
 
 // Statics are not initialized on 7e so in initialize() if necessary
-static u8 chanskip;
 static u8 calData[48][3];
 static u8 channr;
-static u8 counter_rst;
 static u8 ctr;
 static s8 fine;
-static u8 seq_rx_expected;
-static u8 seq_tx_send;
 static u8 packet_size;
 
 
 // u8 ptr[4] = {0x01,0x12,0x23,0x30};
 //u8 ptr[4] = {0x00,0x11,0x22,0x33};
 static enum {
-  FRSKY_BIND,
+  REDPINE_BIND,
 #ifndef EMULATOR
-  FRSKY_BIND_DONE = 1000,
+  REDPINE_BIND_DONE = 1000,
 #else
-  FRSKY_BIND_DONE = 50,
+  REDPINE_BIND_DONE = 50,
 #endif
-  FRSKY_DATA1,
-  FRSKY_DATA2,
-  FRSKY_DATA3,
-  FRSKY_DATA4,
-  FRSKY_DATA5
+  REDPINE_DATA1,
 } state;
 
 static u16 fixed_id;
@@ -176,7 +168,7 @@ static void redpine_build_bind_packet()
 
     packet[3] = fixed_id;
     packet[4] = fixed_id >> 8;
-    int idx = ((state - FRSKY_BIND) % 10) * 5;
+    int idx = ((state - REDPINE_BIND) % 10) * 5;
     packet[5] = idx;
     packet[6] = hop_data[idx++];
     packet[7] = hop_data[idx++];
@@ -196,7 +188,8 @@ static void redpine_build_bind_packet()
 //#define STICK_SCALE    819  // full scale at +-125
 #define STICK_SCALE    751  // +/-100 gives 2000/1000 us pwm
 static u16 scaleForPXX(u8 chan)
-{ //mapped 860,2140(125%) range to 64,1984(PXX values);
+{ 
+//mapped 860,2140(125%) range to 64,1984(PXX values);
 //  return (u16)(((Servo_data[i]-PPM_MIN)*3)>>1)+64;
 // 0-2047, 0 = 817, 1024 = 1500, 2047 = 2182
     s32 chan_val;
@@ -206,7 +199,6 @@ static u16 scaleForPXX(u8 chan)
 
     if (chan_val > 2046)   chan_val = 2046;
     else if (chan_val < 1) chan_val = 1;
-
 
     return chan_val;
 }
@@ -235,14 +227,11 @@ enum {
 };
 
 static void redpine_data_frame() {
-    //0x1D 0xB3 0xFD 0x02 0x56 0x07 0x15 0x00 0x00 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x08 0x00 0x00 0x00 0x00 0x00 0x00 0x96 0x12
-    // channel packing: H (0)7-4, L (0)3-0; H (1)3-0, L (0)11-8; H (1)11-8, L (1)7-4 etc
-
     u16 chan[4];
-    //static u8 failsafe_chan;
+ 
 
-    //ADC_Filter();
-    //MIXER_CalcChannels();
+    ADC_Filter();
+    MIXER_CalcChannels();
     packet_size = Model.proto_opts[PROTO_OPTS_PACKETSIZE];
 
     memset(&packet[0], 0, packet_size);
@@ -281,7 +270,6 @@ static void redpine_data_frame() {
 }
 
 static u16 redpine_cb() {
-  u8 len;
 
   switch(state) {
     default:
@@ -297,13 +285,13 @@ static u16 redpine_cb() {
 #else
       return 90;
 #endif
-    case FRSKY_BIND_DONE:
+    case REDPINE_BIND_DONE:
       PROTOCOL_SetBindState(0);
       initialize_data(0);
       channr = 0;
       state++;
       break;
-    case FRSKY_DATA1:
+    case REDPINE_DATA1:
       if (fine != (s8)Model.proto_opts[PROTO_OPTS_FREQFINE]) {
           fine = (s8)Model.proto_opts[PROTO_OPTS_FREQFINE];
           CC2500_WriteReg(CC2500_0C_FSCTRL0, fine);
@@ -316,7 +304,7 @@ static u16 redpine_cb() {
       CC2500_Strobe(CC2500_SIDLE);
       CC2500_WriteData(packet, packet[0]+1);
       channr = (channr + chanskip) % 47;
-      state = FRSKY_DATA1;
+      state = REDPINE_DATA1;
 #ifndef EMULATOR
       return (Model.proto_opts[PROTO_OPTS_LOOPTIME]*100);
 #else
@@ -428,7 +416,6 @@ static void initialize(int bind)
     fine = Model.proto_opts[PROTO_OPTS_FREQFINE];
     fixed_id = (u16) get_tx_id();
     channr = 0;
-    chanskip = 1; //get_tx_id()
     ctr = 0;
     seq_rx_expected = 0;
     seq_tx_send = 8;
@@ -440,10 +427,10 @@ static void initialize(int bind)
 
     if (bind) {
         PROTOCOL_SetBindState(0xFFFFFFFF);
-        state = FRSKY_BIND;
+        state = REDPINE_BIND;
         initialize_data(1);
     } else {
-        state = FRSKY_DATA1;
+        state = REDPINE_DATA1;
         initialize_data(0);
     }
 
@@ -467,12 +454,6 @@ const void *REDPINE_Cmds(enum ProtoCmds cmd)
             if (!Model.proto_opts[PROTO_OPTS_AD2GAIN]) Model.proto_opts[PROTO_OPTS_AD2GAIN] = 100;  // if not set, default to no gain
             if (!Model.proto_opts[PROTO_OPTS_LOOPTIME]) Model.proto_opts[PROTO_OPTS_LOOPTIME] = 15;  // if not set, default to no gain
             return redpine_opts;
-        case PROTOCMD_TELEMETRYSTATE:
-            return (void *)1L;
-        case PROTOCMD_TELEMETRYTYPE:
-            return (void *)(long) TELEM_FRSKY;
-        case PROTOCMD_TELEMETRYRESET:
-            return 0;
         case PROTOCMD_RESET:
         case PROTOCMD_DEINIT:
             CLOCK_StopTimer();
