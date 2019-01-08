@@ -24,7 +24,6 @@
 #include "config/model.h"
 #include "config/tx.h"
 #include "telemetry.h"
-#include "devo.h"
 
 #ifdef MODULAR
   //Some versions of gcc applythis to definitions, others to calls
@@ -37,7 +36,6 @@
 #ifdef PROTO_HAS_CC2500
 
 #include "iface_cc2500.h"
-
 
 static const char * const redpine_opts[] = {
   _tr_noop("AD2GAIN"),  "0", "2000", "655361", NULL,       // big step 10, little step 1
@@ -66,9 +64,6 @@ static u8 ctr;
 static s8 fine;
 static u8 packet_size;
 
-
-// u8 ptr[4] = {0x01,0x12,0x23,0x30};
-//u8 ptr[4] = {0x00,0x11,0x22,0x33};
 static enum {
   REDPINE_BIND,
 #ifndef EMULATOR
@@ -160,7 +155,7 @@ static void set_start(u8 ch) {
 #define RXNUM 16
 static void redpine_build_bind_packet()
 {
-    u8 packet_size_bind = 30;
+    const u8 packet_size_bind = 30;
 
     packet[0] = 29;
     packet[1] = 0x03;
@@ -185,8 +180,7 @@ static void redpine_build_bind_packet()
     packet[packet_size_bind-1] = lcrc;
 }
 
-//#define STICK_SCALE    819  // full scale at +-125
-#define STICK_SCALE    751  // +/-100 gives 2000/1000 us pwm
+#define STICK_SCALE    751 
 static u16 scaleForPXX(u8 chan)
 { 
 //mapped 860,2140(125%) range to 64,1984(PXX values);
@@ -229,7 +223,6 @@ enum {
 static void redpine_data_frame() {
     u16 chan[4];
  
-
     ADC_Filter();
     MIXER_CalcChannels();
     packet_size = Model.proto_opts[PROTO_OPTS_PACKETSIZE];
@@ -245,10 +238,10 @@ static void redpine_data_frame() {
     chan[2] = scaleForPXX(2);
     chan[3] = scaleForPXX(3);
 
-    packet[3]   = chan[0];
+    packet[3] = chan[0];
     packet[4] = (((chan[0] >> 8) & 0x07) | (chan[1] << 4)) | GET_FLAG(CHANNEL5, 0x08);
     packet[5] = ((chan[1] >> 4) & 0x7F) | GET_FLAG(CHANNEL6, 0x80);
-    packet[6]   = chan[2];
+    packet[6] = chan[2];
     packet[7] = (((chan[2] >> 8) & 0x07) | (chan[3] << 4))  | GET_FLAG(CHANNEL7, 0x08); 
     packet[8] = ((chan[3] >> 4) & 0x7F) | GET_FLAG(CHANNEL8, 0x80);
     packet[9] = GET_FLAG(CHANNEL9, 0x01)
@@ -261,7 +254,7 @@ static void redpine_data_frame() {
             | GET_FLAG(CHANNEL16, 0x80);
             
     packet[10] = Model.proto_opts[PROTO_OPTS_LOOPTIME]; 
-    packet[11] = 0;
+    //packet[11] = 0;  Future use
 
     u16 lcrc = crc(&packet[0], 12);
     packet[12] = lcrc >> 8;
@@ -335,7 +328,6 @@ static const u8 init_data[][3] = {
     {CC2500_17_MCSM1,     0x0c,  0x0E},
     {CC2500_18_MCSM0,     0x18,  0x18},
     {CC2500_3E_PATABLE,   0xff,  0xff},
-
 };
 
 // register, value
@@ -362,11 +354,11 @@ static const u8 init_data_shared[][2] = {
 static void redpine_init() {
   CC2500_Reset();
 
-  u8 format = Model.proto_opts[PROTO_OPTS_FORMAT] + 1;
+  unsigned format = Model.proto_opts[PROTO_OPTS_FORMAT] + 1;
 
-  for (u32 i=0; i < ((sizeof init_data) / (sizeof init_data[0])); i++)
+  for (unsigned i=0; i < ((sizeof init_data) / (sizeof init_data[0])); i++)
       CC2500_WriteReg(init_data[i][0], init_data[i][format]);
-  for (u32 i=0; i < ((sizeof init_data_shared) / (sizeof init_data_shared[0])); i++)
+  for (unsigned i=0; i < ((sizeof init_data_shared) / (sizeof init_data_shared[0])); i++)
       CC2500_WriteReg(init_data_shared[i][0], init_data_shared[i][1]);
 
   CC2500_WriteReg(CC2500_0C_FSCTRL0, fine);
@@ -455,6 +447,8 @@ const void *REDPINE_Cmds(enum ProtoCmds cmd)
         case PROTOCMD_DEINIT:
             CLOCK_StopTimer();
             return (void *)(CC2500_Reset() ? 1L : -1L);
+        case PROTOCMD_TELEMETRYSTATE: return (void *) PROTO_TELEM_UNSUPPORTED; 
+        case PROTOCMD_CHANNELMAP: return AETRG;
         default: break;
     }
     return 0;
