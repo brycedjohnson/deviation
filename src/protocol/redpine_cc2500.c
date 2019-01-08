@@ -303,7 +303,7 @@ static u16 redpine_cb() {
       redpine_data_frame();
       CC2500_Strobe(CC2500_SIDLE);
       CC2500_WriteData(packet, packet[0]+1);
-      channr = (channr + chanskip) % 47;
+      channr = (channr + 1) % 47;
       state = REDPINE_DATA1;
 #ifndef EMULATOR
       return (Model.proto_opts[PROTO_OPTS_LOOPTIME]*100);
@@ -417,9 +417,6 @@ static void initialize(int bind)
     fixed_id = (u16) get_tx_id();
     channr = 0;
     ctr = 0;
-    seq_rx_expected = 0;
-    seq_tx_send = 8;
-
     u32 seed = get_tx_id();
 
     redpine_init();
