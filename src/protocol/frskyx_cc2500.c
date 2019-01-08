@@ -109,7 +109,7 @@ static const u8 hop_data[] = {
 };
 
 
-static const u16 CRCTable[] = {
+const u16 frsky_CRCTable[] = {
   0x0000,0x1189,0x2312,0x329b,0x4624,0x57ad,0x6536,0x74bf,
   0x8c48,0x9dc1,0xaf5a,0xbed3,0xca6c,0xdbe5,0xe97e,0xf8f7,
   0x1081,0x0108,0x3393,0x221a,0x56a5,0x472c,0x75b7,0x643e,
@@ -144,12 +144,10 @@ static const u16 CRCTable[] = {
   0x7bc7,0x6a4e,0x58d5,0x495c,0x3de3,0x2c6a,0x1ef1,0x0f78
 };
 
-
-
-static u16 crc(u8 *data, u8 len) {
+u16 frsky_crc(u8 *data, u8 len) {
   u16 crc = 0;
   for(int i=0; i < len; i++)
-      crc = (crc<<8) ^ CRCTable[((u8)(crc>>8) ^ *data++) & 0xFF];
+      crc = (crc<<8) ^ frsky_CRCTable[((u8)(crc>>8) ^ *data++) & 0xFF];
   return crc;
 }
 
@@ -191,7 +189,7 @@ static void frskyX_build_bind_packet()
 
     memset(&packet[13], 0, packet_size-15);
 
-    u16 lcrc = crc(&packet[3], packet_size-5);
+    u16 lcrc = frsky_crc(&packet[3], packet_size-5);
     packet[packet_size-2] = lcrc >> 8;
     packet[packet_size-1] = lcrc;
 
@@ -315,7 +313,7 @@ static void frskyX_data_frame() {
 
     memset(&packet[22], 0, packet_size-24);
 
-    u16 lcrc = crc(&packet[3], packet_size-5);
+    u16 lcrc = frsky_crc(&packet[3], packet_size-5);
     packet[packet_size-2] = lcrc >> 8;
     packet[packet_size-1] = lcrc;
 }
@@ -369,7 +367,7 @@ static void frsky_check_telemetry(u8 *pkt, u8 len) {
         && pkt[0] == TELEM_PKT_SIZE - 3
         && pkt[1] == (fixed_id & 0xff)
         && pkt[2] == (fixed_id >> 8)
-        && crc(&pkt[3], TELEM_PKT_SIZE-7) == (pkt[TELEM_PKT_SIZE-4] << 8 | pkt[TELEM_PKT_SIZE-3])
+        && frsky_crc(&pkt[3], TELEM_PKT_SIZE-7) == (pkt[TELEM_PKT_SIZE-4] << 8 | pkt[TELEM_PKT_SIZE-3])
        ) {
         if (pkt[4] & 0x80) {   // distinguish RSSI from VOLT1
             Telemetry.value[TELEM_FRSKY_RSSI] = pkt[4] & 0x7f;
