@@ -29,8 +29,6 @@
   //Some versions of gcc applythis to definitions, others to calls
   //So just use long_calls everywhere
   //#pragma long_calls_off
-  extern unsigned _data_loadaddr;
-  const unsigned long protocol_type = (unsigned long)&_data_loadaddr;
 #endif
 
 #ifdef PROTO_HAS_CC2500
@@ -38,7 +36,6 @@
 #include "iface_cc2500.h"
 
 static const char * const redpine_opts[] = {
-  _tr_noop("AD2GAIN"),  "0", "2000", "655361", NULL,       // big step 10, little step 1
   _tr_noop("Freq-Fine"),  "-127", "127", NULL,
   _tr_noop("Format"),  "Fast", "Slow", NULL,
   _tr_noop("LoopIn.1ms"),  "1", "100", NULL,
@@ -46,7 +43,6 @@ static const char * const redpine_opts[] = {
   NULL
 };
 enum {
-    PROTO_OPTS_AD2GAIN,
     PROTO_OPTS_FREQFINE,
     PROTO_OPTS_FORMAT,
     PROTO_OPTS_LOOPTIME,
@@ -423,7 +419,7 @@ static void initialize(int bind)
     fixed_id = (u16) get_tx_id();
     channr = 0;
     ctr = 0;
-    u32 seed = get_tx_id();
+    //u32 seed = get_tx_id();
 
     redpine_init();
     CC2500_SetTxRxMode(TX_EN);  // enable PA
@@ -444,24 +440,23 @@ static void initialize(int bind)
 #endif
 }
 
-const void *REDPINE_Cmds(enum ProtoCmds cmd)
+uintptr_t REDPINE_Cmds(enum ProtoCmds cmd)
 {
     switch(cmd) {
         case PROTOCMD_INIT: initialize(0); return 0;
         case PROTOCMD_CHECK_AUTOBIND: return 0; //Never Autobind
         case PROTOCMD_BIND:  initialize(1); return 0;
-        case PROTOCMD_NUMCHAN: return (void *)16L;
-        case PROTOCMD_DEFAULT_NUMCHAN: return (void *)16L;
-        case PROTOCMD_CURRENT_ID: return Model.fixed_id ? (void *)((unsigned long)Model.fixed_id) : 0;
+        case PROTOCMD_NUMCHAN: return 16L;
+        case PROTOCMD_DEFAULT_NUMCHAN: return 16L;
+        case PROTOCMD_CURRENT_ID: return Model.fixed_id;
         case PROTOCMD_GETOPTIONS:
-            if (!Model.proto_opts[PROTO_OPTS_AD2GAIN]) Model.proto_opts[PROTO_OPTS_AD2GAIN] = 100;  // if not set, default to no gain
             if (!Model.proto_opts[PROTO_OPTS_LOOPTIME]) Model.proto_opts[PROTO_OPTS_LOOPTIME] = 15;  // if not set, default to no gain
-            return redpine_opts;
+            return (uintptr_t)redpine_opts;
         case PROTOCMD_RESET:
         case PROTOCMD_DEINIT:
             CLOCK_StopTimer();
-            return (void *)(CC2500_Reset() ? 1L : -1L);
-        case PROTOCMD_TELEMETRYSTATE: return (void *) PROTO_TELEM_UNSUPPORTED; 
+            return (CC2500_Reset() ? 1 : -1);
+        case PROTOCMD_TELEMETRYSTATE: return PROTO_TELEM_UNSUPPORTED; 
         case PROTOCMD_CHANNELMAP: return AETRG;
         default: break;
     }
