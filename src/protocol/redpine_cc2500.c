@@ -177,9 +177,9 @@ static void redpine_build_bind_packet()
     packet[packet_size_bind-1] = lcrc;
 }
 
-#define STICK_SCALE    751 
+#define STICK_SCALE    751
 static u16 scaleForPXX(u8 chan)
-{ 
+{
 // mapped 860,2140(125%) range to 64,1984(PXX values);
 // return (u16)(((Servo_data[i]-PPM_MIN)*3)>>1)+64;
 // 0-2047, 0 = 817, 1024 = 1500, 2047 = 2182
@@ -286,7 +286,7 @@ break;
 #else
         return 5;
 #endif
-          
+
     case REDPINE_DATA1:
         if (fine != (s8)Model.proto_opts[PROTO_OPTS_FREQFINE]) {
             fine = (s8)Model.proto_opts[PROTO_OPTS_FREQFINE];
@@ -308,7 +308,6 @@ break;
       return Model.proto_opts[PROTO_OPTS_LOOPTIME];
 #endif
 
-
   }
   return 1;
 }
@@ -316,7 +315,7 @@ break;
 // register, fast 250k, slow
 static const u8 init_data[][3] = {
     {CC2500_00_IOCFG2,    0x06,  0x06},
-    {CC2500_02_IOCFG0,    0x06,  0x06},    
+    {CC2500_02_IOCFG0,    0x06,  0x06},
     {CC2500_06_PKTLEN,    0x1E,  0x23},
     {CC2500_07_PKTCTRL1,  0x04,  0x04},
     {CC2500_08_PKTCTRL0,  0x05,  0x01},
@@ -370,7 +369,7 @@ static void redpine_init() {
   CC2500_WriteReg(CC2500_0C_FSCTRL0, fine);
   CC2500_Strobe(CC2500_SIDLE);
 
-  //calibrate hop channels
+  // calibrate hop channels
   for (u8 c = 0; c < 47; c++) {
       CC2500_Strobe(CC2500_SIDLE);
       CC2500_WriteReg(CC2500_0A_CHANNR, hop_data[c]);
@@ -416,7 +415,7 @@ static void initialize(int bind)
     fixed_id = (u16) get_tx_id();
     channr = 0;
     ctr = 0;
-    //u32 seed = get_tx_id();
+    // u32 seed = get_tx_id();
 
     redpine_init();
     CC2500_SetTxRxMode(TX_EN);  // enable PA
@@ -439,9 +438,9 @@ static void initialize(int bind)
 
 uintptr_t REDPINE_Cmds(enum ProtoCmds cmd)
 {
-    switch(cmd) {
+    switch (cmd) {
         case PROTOCMD_INIT: initialize(0); return 0;
-        case PROTOCMD_CHECK_AUTOBIND: return 0; //Never Autobind
+        case PROTOCMD_CHECK_AUTOBIND: return 0;  // Never Autobind
         case PROTOCMD_BIND:  initialize(1); return 0;
         case PROTOCMD_NUMCHAN: return 16L;
         case PROTOCMD_DEFAULT_NUMCHAN: return 16L;
@@ -453,7 +452,7 @@ uintptr_t REDPINE_Cmds(enum ProtoCmds cmd)
         case PROTOCMD_DEINIT:
             CLOCK_StopTimer();
             return (CC2500_Reset() ? 1 : -1);
-        case PROTOCMD_TELEMETRYSTATE: return PROTO_TELEM_UNSUPPORTED; 
+        case PROTOCMD_TELEMETRYSTATE: return PROTO_TELEM_UNSUPPORTED;
         case PROTOCMD_CHANNELMAP: return AETRG;
         default: break;
     }
