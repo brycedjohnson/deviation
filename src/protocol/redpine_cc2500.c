@@ -307,7 +307,6 @@ break;
 #else
       return Model.proto_opts[PROTO_OPTS_LOOPTIME];
 #endif
-
   }
   return 1;
 }
