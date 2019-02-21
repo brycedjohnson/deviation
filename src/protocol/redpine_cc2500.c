@@ -53,8 +53,9 @@ ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
 
 #define MAX_PACKET_SIZE 33
 
+#define NUM_HOPS 50
 // Statics are not initialized on 7e so in initialize() if necessary
-static u8 calData[48][3];
+static u8 calData[NUM_HOPS][3];
 static u8 channr;
 static u8 ctr;
 static s8 fine;
@@ -75,18 +76,7 @@ static u16 fixed_id;
 static u8 packet[MAX_PACKET_SIZE];
 static u16 mixer_runtime;
 
-static const u8 hop_data[] = {
-  0x02, 0xD4, 0xBB, 0xA2, 0x89,
-  0x70, 0x57, 0x3E, 0x25, 0x0C,
-  0xDE, 0xC5, 0xAC, 0x93, 0x7A,
-  0x61, 0x48, 0x2F, 0x16, 0xE8,
-  0xCF, 0xB6, 0x9D, 0x84, 0x6B,
-  0x52, 0x39, 0x20, 0x07, 0xD9,
-  0xC0, 0xA7, 0x8E, 0x75, 0x5C,
-  0x43, 0x2A, 0x11, 0xE3, 0xCA,
-  0xB1, 0x98, 0x7F, 0x66, 0x4D,
-  0x34, 0x1B, 0x00, 0x1D, 0x03
-};
+static u8 hop_data[NUM_HOPS];
 
 
 static const u16 CRCTable[] = {
@@ -143,11 +133,12 @@ static void initialize_data(u8 adr)
 
 static void set_start(u8 ch)
 {
+
   CC2500_Strobe(CC2500_SIDLE);
   CC2500_WriteReg(CC2500_23_FSCAL3, calData[ch][0]);
   CC2500_WriteReg(CC2500_24_FSCAL2, calData[ch][1]);
   CC2500_WriteReg(CC2500_25_FSCAL1, calData[ch][2]);
-  CC2500_WriteReg(CC2500_0A_CHANNR, ch == 47 ? 0 : hop_data[ch]);
+  CC2500_WriteReg(CC2500_0A_CHANNR, hop_data[ch]);
 }
 
 #define RXNUM 16
@@ -259,7 +250,7 @@ static void redpine_data_frame() {
 static u16 redpine_cb() {
   switch (state) {
     default:
-        set_start(47);
+        set_start(49);
         CC2500_SetPower(Model.tx_power);
         CC2500_Strobe(CC2500_SFRX);
         redpine_build_bind_packet();
@@ -300,7 +291,7 @@ break;
         redpine_data_frame();
         CC2500_Strobe(CC2500_SIDLE);
         CC2500_WriteData(packet, packet[0]+1);
-        channr = (channr + 1) % 47;
+        channr = (channr + 1) % 49;
         state = REDPINE_DATAM;
 #ifndef EMULATOR
       return (Model.proto_opts[PROTO_OPTS_LOOPTIME]*100 - mixer_runtime);
@@ -369,7 +360,7 @@ static void redpine_init() {
   CC2500_Strobe(CC2500_SIDLE);
 
   // calibrate hop channels
-  for (u8 c = 0; c < 47; c++) {
+  for (u8 c = 0; c < sizeof(hop_data); c++) {
       CC2500_Strobe(CC2500_SIDLE);
       CC2500_WriteReg(CC2500_0A_CHANNR, hop_data[c]);
       CC2500_Strobe(CC2500_SCAL);
@@ -378,13 +369,6 @@ static void redpine_init() {
       calData[c][1] = CC2500_ReadReg(CC2500_24_FSCAL2);
       calData[c][2] = CC2500_ReadReg(CC2500_25_FSCAL1);
   }
-  CC2500_Strobe(CC2500_SIDLE);
-  CC2500_WriteReg(CC2500_0A_CHANNR, 0x00);
-  CC2500_Strobe(CC2500_SCAL);
-  usleep(900);
-  calData[47][0] = CC2500_ReadReg(CC2500_23_FSCAL3);
-  calData[47][1] = CC2500_ReadReg(CC2500_24_FSCAL2);
-  calData[47][2] = CC2500_ReadReg(CC2500_25_FSCAL1);
 }
 
 
@@ -414,7 +398,27 @@ static void initialize(int bind)
     fixed_id = (u16) get_tx_id();
     channr = 0;
     ctr = 0;
-    // u32 seed = get_tx_id();
+
+    //Used from kn_nrf24l01.c : kn_calculate_freqency_hopping_channels
+    u32 idx = 0;
+    u32 rnd = get_tx_id();
+    #define MAX_RF_CHANNEL 255
+    hop_data[idx++] = 1;
+    while (idx < sizeof(hop_data)-1) {
+        u32 i;
+        rnd = rnd * 0x0019660D + 0x3C6EF35F; // Randomization
+        // Drop least-significant byte for better randomization. Start from 1
+        u8 next_ch = (rnd >> 8) % MAX_RF_CHANNEL + 1;
+        // Check that it's not duplicate nor adjacent nor channel 0 or 1
+        for (i = 0; i < idx; i++) {
+            u8 ch = hop_data[i];
+            if( (ch <= next_ch + 1) && (ch >= next_ch - 1) && (ch > 1) ) break;
+        }
+        if (i != idx)
+            continue;
+        hop_data[idx++] = next_ch;
+    }
+    hop_data[49] = 0; //Last channel is the bind channel at hop 0
 
     redpine_init();
     CC2500_SetTxRxMode(TX_EN);  // enable PA
