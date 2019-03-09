@@ -11,10 +11,10 @@ ifndef  TARGET
 TARGET   ?= devo8
 default: $(TARGET)
 
-ALLTARGETS = $(filter-out common,$(notdir $(wildcard target/*)))
+ALLTARGETS = $(filter-out common,$(notdir $(wildcard target/tx/*/*)))
 
 # The supported transmitters
-TXS ?= devo6 devo7e devo7e-256 devo8 devo10 devo12e devo12 devof7 devof7-XMS devof4 devof4-XMS devof12e devof12e-XMS at9 t8sg t8sg_v2 t8sg_v2_plus ir8m
+TXS ?= devo6 devo7e devo7e-256 devo8 devo10 devo12e devo12 devof7 devof7-XMS devof4 devof4-XMS devof12e devof12e-XMS at9 at10 t8sg t8sg_v2 t8sg_v2_plus ir8m
 
 #Filter non-existant emus
 EMUS = $(foreach dir,$(TXS:%=emu_%),$(if $(wildcard target/$(dir)),$(dir),))
@@ -65,13 +65,16 @@ endef
 $(foreach t,$(ALLTARGETS),$(eval $(call make-target,$t)))
 endif
 
+# Determine the directory above the target directory
+FAMILY = $(notdir $(patsubst %/,%,$(dir $(wildcard target/tx/*/$(TARGET)))))
+
 # We want to turn on INCLUDE_FS by default
 INCLUDE_FS ?= 1
 
 # Use VERBOSE=1 to enable verbose make
 PROGMODE ?= STATUS_SCREEN
 SDIR := .
-include target/$(TARGET)/Makefile.inc
+include target/tx/$(FAMILY)/$(TARGET)/Makefile.inc
 
 NUM_MODELS ?= 30
 TYPE     ?= prd
@@ -103,7 +106,7 @@ DUMP ?= objdump
 ############################################
 #This section defines the source files used#
 ############################################
-SRC_C    +=  $(wildcard *.c) $(wildcard screen/*.c) $(wildcard screen/$(SCREENSIZE)/*.c) \
+SRC_C    +=  $(wildcard *.c) $(wildcard misc/*.c) $(wildcard screen/*.c) $(wildcard screen/$(SCREENSIZE)/*.c) \
              $(wildcard gui/*.c) $(wildcard pages/$(SCREENSIZE)/*.c) $(wildcard config/*.c)
 
 ifdef MODULAR
@@ -159,11 +162,11 @@ ifeq "$(TYPE)" "dev"
   CFLAGS   := $(CFLAGS) -DBUILDTYPE_DEV
 endif
 ifdef MODULAR
-EXTRA_CFLAGS   :=  -DMODULAR=$(MODULAR)
-CFLAGS   +=  -DENABLE_MODULAR=$(MODULAR)
+MODULE_CFLAGS   := $(MODULE_CFLAGS) -DMODULAR=$(MODULAR)
+CFLAGS   := $(CFLAGS) -DENABLE_MODULAR=$(MODULAR)
 endif
 
-CFLAGS   := $(CFLAGS) -g -Wall -Wextra -Werror=undef -I. -D$(PROGMODE) -std=gnu99 -Itarget/$(TARGET) -Igui/$(SCREENSIZE) \
+CFLAGS   := $(CFLAGS) -g -Wall -Wextra -Werror=undef -I. -D$(PROGMODE) -std=gnu99 -Itarget/tx/$(FAMILY)/$(TARGET) -Igui/$(SCREENSIZE) \
             -Ipages/$(SCREENSIZE) \
             -DHGVERSION="\"${HGVERSION}\""
 CXXFLAGS := $(CXXFLAGS) $(patsubst -std=gnu99,,$(CFLAGS))
@@ -196,7 +199,7 @@ all : $(ALL)
 ####################################
 # recompile if the Makefile changes#
 ####################################
-$(OBJS) $(PROTO_OBJS) ($PROTO_EXTRA_OBJS): Makefile target/$(TARGET)/Makefile.inc $(EXTRA_MAKEFILES)
+$(OBJS) $(PROTO_OBJS) ($PROTO_EXTRA_OBJS): Makefile target/tx/$(FAMILY)/$(TARGET)/Makefile.inc $(EXTRA_MAKEFILES)
 
 ##################################################################################
 # The following enables quiet output unless you use VERBOSE=1                    #
@@ -281,9 +284,9 @@ ifdef LINKFILE #Create an empty 'obj/$(TARGET)/optimize.ld' just in case the lin
 	echo "" > objs/$(TARGET)/optimize.ld
 endif
 ifeq ("$(SRC_CXX)", " ")
-	$(CC) -o $@ $(OBJS) $(LIBOPENCM3) $(LFLAGS) $(LFLAGS2) $(CFLAGS)
+	$(CC) -o $@ $(OBJS) $(LIBOPENCM3) $(LFLAGS) $(LFLAGS2) $(CFLAGS) $(EXTRA_CFLAGS)
 else
-	$(CXX) -o $@ $(OBJS) $(LIBOPENCM3) $(LFLAGS) $(LFLAGS2) $(CFLAGS)
+	$(CXX) -o $@ $(OBJS) $(LIBOPENCM3) $(LFLAGS) $(LFLAGS2) $(CFLAGS) $(EXTRA_CFLAGS)
 endif
 
 #################
@@ -319,6 +322,7 @@ ifeq "$(TYPE)" "dev"
 else
 	../utils/check_string_size.pl -target $(FILESYSTEM) -objdir $(ODIR) -quiet
 endif
+	../utils/run_linter.py --diff --skip-github --no-fail
 
 ######################
 #Necessary Font files#
@@ -331,7 +335,8 @@ filesystem/$(FILESYSTEM)/media/15normal.fon: fonts/15normal.bdf
 	mkdir -p filesystem/$(FILESYSTEM)/media/
 	../utils/font/bdf_to_font.pl -maxsize 15 -mode bin $< -out $@ -minspace 8
 
-filesystem/$(FILESYSTEM)/media/18bold.fon: fonts/18bold.bdf
+# special font for f12e with 18x12 char size
+filesystem/$(FILESYSTEM)/media/f12e.fon: fonts/f12e.bdf
 	mkdir -p filesystem/$(FILESYSTEM)/media/
 	../utils/font/bdf_to_font.pl -maxsize 18 -mode bin $< -out $@ -minspace 8
 
@@ -364,7 +369,7 @@ dollar = $$
 define define_compile_rules
 $(ODIR)/%.o: $(1)%.c $(LIBOPENCM3)
 	@echo " + Compiling '$$<'"
-	$(CC) $$(CFLAGS) $$(CFLAGS_$$(basename $$(notdir $$<))) -MD -c -o $$@ $$<
+	$(CC) $$(CFLAGS) $$(EXTRA_CFLAGS) $$(CFLAGS_$$(basename $$(notdir $$<))) -MD -c -o $$@ $$<
 	@cp $(ODIR)/$$*.d $(ODIR)/$$*.P; \
             sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$(dollar)//' \
                 -e '/^$$(dollar)/ d' -e 's/$$(dollar)/ :/' < $(ODIR)/$$*.d >> $(ODIR)/$$*.P; \
@@ -372,7 +377,7 @@ $(ODIR)/%.o: $(1)%.c $(LIBOPENCM3)
 
 $(ODIR)/%.o: $(1)%.cpp $(LIBOPENCM3)
 	@echo " + Compiling '$$<'"
-	$(CXX) $$(CXXFLAGS) $$(CXXFLAGS_$$(basename $$(notdir $$<))) -MD -c -o $$@ $$<
+	$(CXX) $$(CXXFLAGS) $(EXTRA_CFLAGS) $$(CXXFLAGS_$$(basename $$(notdir $$<))) -MD -c -o $$@ $$<
 	@cp $(ODIR)/$$*.d $(ODIR)/$$*.P; \
             sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$(dollar)//' \
                 -e '/^$$(dollar)/ d' -e 's/$$(dollar)/ :/' < $(ODIR)/$$*.d >> $(ODIR)/$$*.P; \
@@ -381,7 +386,7 @@ $(ODIR)/%.o: $(1)%.cpp $(LIBOPENCM3)
 #For module building
 $(ODIR)/%.o_: $(1)%.c $(LIBOPENCM3)
 	@echo " + Compiling '$$<' as module"
-	$(CC) $$(CFLAGS) $$(CFLAGS_$$(basename $$(notdir $$<))) $$(EXTRA_CFLAGS) $$(MODULE_FLAGS) -MD -c -o $$@ $$<
+	$(CC) $$(CFLAGS) $$(MODULE_CFLAGS) $$(CFLAGS_$$(basename $$(notdir $$<))) -MD -c -o $$@ $$<
 	@cp $(ODIR)/$$*.d $(ODIR)/$$*.P; \
             sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$(dollar)//' \
                 -e '/^$$(dollar)/ d' -e 's/$$(dollar)/ :/' < $(ODIR)/$$*.d >> $(ODIR)/$$*.P; \
@@ -400,7 +405,7 @@ $(ODIR)/hgstamp:
 	echo $(HGVERSION) > $(ODIR)/hgstamp
 
 BUILD_TARGET := 1
-include target/$(TARGET)/Makefile.inc
+include target/tx/$(FAMILY)/$(TARGET)/Makefile.inc
 ifdef MODULAR
 include protocol/Makefile.inc
 endif

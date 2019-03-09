@@ -28,7 +28,7 @@
 static void create_scrollable_objs(guiScrollable_t *scrollable, int row);
 static int has_selectable(guiScrollable_t *scrollable);
 
-guiObject_t *GUI_CreateScrollable(guiScrollable_t *scrollable, u16 x, u16 y, u16 width, u16 height, u8 row_height, u8 item_count,
+guiObject_t *GUI_CreateScrollable(guiScrollable_t *scrollable, u16 x, u16 y, u16 width, u16 height, u16 row_height, u8 item_count,
      int (*row_cb)(int absrow, int relrow, int x, void *data),
      guiObject_t * (*getobj_cb)(int relrow, int col, void *data),
      int (*size_cb)(int absrow, void *data),
@@ -311,7 +311,17 @@ static void create_scrollable_objs(guiScrollable_t *scrollable, int row)
     {
         guiObject_t *row_start = get_last_object();
         scrollable->row_cb(row, rel_row, y, scrollable->cb_data);
-        OBJ_SET_ROWSTART(row_start ? row_start->next : objHEAD, 1);
+
+        // check if row_cb actual created one more contorl
+        if (!row_start) {
+            OBJ_SET_ROWSTART(objHEAD, 1);
+        } else {
+            if (row_start->next)
+                OBJ_SET_ROWSTART(row_start->next, 1);
+            else
+                break;  // no rows created, no more rows then
+        }
+
         y += scrollable->row_height * (scrollable->size_cb ? 
                                        scrollable->size_cb(row, scrollable->cb_data) : 1);
         if (y > bottom + scrollable->row_height - ROW_HEIGHT_OFFSET)

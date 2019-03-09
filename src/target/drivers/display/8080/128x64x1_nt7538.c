@@ -14,9 +14,9 @@
 */
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/rcc.h>
-#include <libopencm3/stm32/fsmc.h>
 #include "common.h"
 #include "gui/gui.h"
+#include "target/drivers/mcu/stm32/fsmc.h"
 
 #define LCD_CMD_ADDR ((uint32_t)FSMC_BANK1_BASE) /* Register Address */
 #define LCD_DATA_ADDR ((uint32_t)FSMC_BANK1_BASE + 0x10000) /* Data Address */
@@ -33,28 +33,23 @@ static unsigned int xstart, xend;  // After introducing logical view for devo10,
 static unsigned int xpos, ypos;
 static s8 dir;
 
-void lcd_display(uint8_t on)
+static void lcd_display(uint8_t on)
 {
     LCD_CMD = 0xAE | (on ? 1 : 0);
 }
 
-void lcd_write_display_data(uint8_t display_data)
-{
-    LCD_DATA = display_data;
-}
-
-void lcd_set_page_address(uint8_t page)
+static void lcd_set_page_address(uint8_t page)
 {
     LCD_CMD = 0xB0 | (page & 0x07);
 }
 
-void lcd_set_column_address(uint8_t column)
+static void lcd_set_column_address(uint8_t column)
 {
     LCD_CMD = 0x10 | ((column >> 4) & 0x0F);  //MSB
     LCD_CMD = column & 0x0F;                  //LSB
 }
 
-void lcd_set_start_line(int line)
+static void lcd_set_start_line(int line)
 {
   LCD_CMD = (line & 0x3F) | 0x40; 
 }
@@ -68,37 +63,19 @@ void LCD_Contrast(unsigned contrast)
 
 void LCD_Init()
 {
-    rcc_peripheral_enable_clock(&RCC_APB2ENR, RCC_APB2ENR_IOPDEN);
-    rcc_peripheral_enable_clock(&RCC_APB2ENR, RCC_APB2ENR_IOPEEN);
-    rcc_peripheral_enable_clock(&RCC_AHBENR, RCC_AHBENR_FSMCEN);
+    _fsmc_init(
+        8,
+        0x10000,  /*only bit 16 of addr */
+        FSMC_NOE | FSMC_NWE | FSMC_NE1,  /* Not connected */
+        FSMC_BANK1,
+        /* Normal mode, write enable, 8 bit access, SRAM, bank enabled */
+        FSMC_BCR_FACCEN | FSMC_BCR_WREN | FSMC_BCR_MBKEN,
+        /* Data Setup > 90ns, Address Setup = 2xHCLK to ensure no output collision in 6800
+           mode since LCD E and !CS always active */
+        FSMC_BTR_DATASTx(7) | FSMC_BTR_ADDHLDx(0) | FSMC_BTR_ADDSETx(2),
+        0);
 
-    gpio_set_mode(GPIOD, GPIO_MODE_OUTPUT_50_MHZ,
-                  GPIO_CNF_OUTPUT_ALTFN_PUSHPULL,
-                  GPIO0 | GPIO1 | GPIO10 | GPIO14 | GPIO15); //D2|D3|D0|D1
 
-    gpio_set_mode(GPIOE, GPIO_MODE_OUTPUT_50_MHZ,
-                  GPIO_CNF_OUTPUT_ALTFN_PUSHPULL,
-                  GPIO7 | GPIO8 | GPIO9 | GPIO10); // D4|D5|D6|D7
-
-    gpio_set_mode(GPIOD, GPIO_MODE_OUTPUT_50_MHZ, // A16
-                  GPIO_CNF_OUTPUT_ALTFN_PUSHPULL,
-                  GPIO11);
-
-    gpio_set_mode(GPIOD, GPIO_MODE_OUTPUT_50_MHZ, // NOE|NWE
-                  GPIO_CNF_OUTPUT_ALTFN_PUSHPULL,
-                  GPIO4 | GPIO5);
-
-    gpio_set_mode(GPIOD, GPIO_MODE_OUTPUT_50_MHZ, // NE1 (not connectred)
-                  GPIO_CNF_OUTPUT_ALTFN_PUSHPULL,
-                  GPIO7);
-
-    /* Normal mode, write enable, 8 bit access, SRAM, bank enabled */
-    FSMC_BCR1 = (FSMC_BCR1 & 0x000000C0) | FSMC_BCR_WREN | FSMC_BCR_MBKEN;
-
-    /* Read & write timings */
-    /* Data Setup > 90ns, Address Setup = 2xHCLK to ensure no output collision in 6800
-       mode since LCD E and !CS always active */
-    FSMC_BTR1 = FSMC_BTR_DATASTx(7) | FSMC_BTR_ADDHLDx(0) | FSMC_BTR_ADDSETx(2);
 
     // LCD bias setting (11); 0xA2; 1/9
     LCD_CMD = 0xA2;

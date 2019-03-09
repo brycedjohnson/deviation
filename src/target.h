@@ -31,12 +31,6 @@ enum {
 };
 #undef BUTTONDEF
 
-#ifdef MODULAR
-  #define MODULE_CALLTYPE __attribute__((__long_call__))
-#else
-  #define MODULE_CALLTYPE __attribute__ ((externally_visible))
-#endif
-
 #define CHAN_ButtonMask(btn) (btn ? (1 << (btn - 1)) : 0)
 
 #define NUM_TX_INPUTS (INP_LAST - 1)
@@ -117,6 +111,10 @@ void SPITouch_Calibrate(s32 xscale, s32 yscale, s32 xoff, s32 yoff);
 void Initialize_ButtonMatrix();
 u32 ScanButtons();
 
+/* Rotary */
+void ROTARY_Init();
+u32 ROTARY_Scan();
+
 /* Power functions */
 void PWR_Init(void);
 unsigned  PWR_ReadVoltage(void);
@@ -130,19 +128,20 @@ void PWR_Sleep();
 enum MsecCallback {
     MEDIUM_PRIORITY,
     LOW_PRIORITY,
-    LAST_PRIORITY,
+    TARGET_PRIORITY,
+    NUM_MSEC_CALLBACKS,
 };
 
 void CLOCK_Init(void);
-MODULE_CALLTYPE u32 CLOCK_getms(void);
-MODULE_CALLTYPE void CLOCK_StartTimer(unsigned us, u16 (*cb)(void));
-MODULE_CALLTYPE void CLOCK_StopTimer();
+u32 CLOCK_getms(void);
+void CLOCK_StartTimer(unsigned us, u16 (*cb)(void));
+void CLOCK_StopTimer();
 void CLOCK_SetMsecCallback(int cb, u32 msec);
 void CLOCK_ClearMsecCallback(int cb);
 void CLOCK_StartWatchdog();
-MODULE_CALLTYPE void CLOCK_ResetWatchdog();
-MODULE_CALLTYPE void CLOCK_RunMixer();
-MODULE_CALLTYPE void CLOCK_StartMixer();
+void CLOCK_ResetWatchdog();
+void CLOCK_RunMixer();
+void CLOCK_StartMixer();
 typedef enum {
     MIX_TIMER,
     MIX_NOT_DONE,
@@ -151,10 +150,12 @@ typedef enum {
 extern volatile mixsync_t mixer_sync;
 
 /*PWM/PPM functions */
+#define PPM_POLARITY_NORMAL 0
+#define PPM_POLARITY_INVERTED 1
 void PWM_Initialize();
 void PWM_Stop();
 void PWM_Set(int);
-void PPM_Enable(unsigned low_time, volatile u16 *pulses, u8 num_pulses);
+void PPM_Enable(unsigned active_time, volatile u16 *pulses, u8 num_pulses, u8 polarity);
 void PXX_Enable(u8 *packet);
 
 /* PPM-In functions */
@@ -181,7 +182,51 @@ void SPIFlash_WriteBytes(u32 writeAddress, u32 length, const u8 * buffer);
 void SPIFlash_WriteByte(u32 writeAddress, const unsigned byte);
 void SPIFlash_ReadBytes(u32 readAddress, u32 length, u8 * buffer);
 int  SPIFlash_ReadBytesStopCR(u32 readAddress, u32 length, u8 * buffer);
-void SPI_FlashBlockWriteEnable(unsigned enable);
+void SPIFlash_BlockWriteEnable(unsigned enable);
+
+void MCUFlash_Init();
+u32  MCUFlash_ReadID();
+void MCUFlash_EraseSector(u32 sectorAddress);
+void MCUFlash_BulkErase();
+void MCUFlash_WriteBytes(u32 writeAddress, u32 length, const u8 * buffer);
+void MCUFlash_WriteByte(u32 writeAddress, const unsigned byte);
+void MCUFlash_ReadBytes(u32 readAddress, u32 length, u8 * buffer);
+int  MCUFlash_ReadBytesStopCR(u32 readAddress, u32 length, u8 * buffer);
+void MCUFlash_BlockWriteEnable(unsigned enable);
+
+void PARFlash_Init();
+void PARFlash_ReadBytes(u32 readAddress, u32 length, u8 * buffer);
+int  PARFlash_ReadBytesStopCR(u32 readAddress, u32 length, u8 * buffer);
+
+void MMC_Init();
+
+#define FLASHTYPE_SPI 1
+#define FLASHTYPE_MCU 2
+#define FLASHTYPE_MMC 3
+
+#if FLASHTYPE == FLASHTYPE_SPI
+    #define STORAGE_Init()   SPIFlash_Init()
+    #define STORAGE_ReadID() SPIFlash_ReadID()
+    #define STORAGE_WriteEnable(enable) SPIFlash_BlockWriteEnable(enable)
+    #define STORAGE_ReadBytes SPIFlash_ReadBytes
+    #define STORAGE_ReadBytesStopCR SPIFlash_ReadBytesStopCR
+    #define STORAGE_WriteBytes SPIFlash_WriteBytes
+    #define STORAGE_EraseSector SPIFlash_EraseSector
+#elif FLASHTYPE == FLASHTYPE_MCU
+    #define STORAGE_Init()   MCUFlash_Init()
+    #define STORAGE_ReadID() MCUFlash_ReadID()
+    #define STORAGE_WriteEnable(enable) MCUFlash_BlockWriteEnable(enable)
+    #define STORAGE_ReadBytes MCUFlash_ReadBytes
+    #define STORAGE_ReadBytesStopCR MCUFlash_ReadBytesStopCR
+    #define STORAGE_WriteBytes MCUFlash_WriteBytes
+    #define STORAGE_EraseSector MCUFlash_EraseSector
+#elif FLASHTYPE == FLASHTYPE_MMC
+    #define STORAGE_WriteEnable(enable) do {} while (0)
+    #define STORAGE_Init() MMC_Init()
+#else
+#error Define FLASHTYPE to FLASHTYPE_MCU or FLASHTYPE_SPI or FLASHTYPE_MMC
+#endif
+
 
 /* Sound */
 void SOUND_Init();
@@ -194,6 +239,12 @@ void SOUND_Stop();
 void VIBRATINGMOTOR_Init();
 void VIBRATINGMOTOR_Start();
 void VIBRATINGMOTOR_Stop();
+
+/* LED Driver */
+void LED_Init();
+void LED_Status(u8 on);
+void LED_RF(u8 on);
+void LED_Storage(u8 on);
 
 /* UART & Debug */
 typedef enum {
@@ -225,6 +276,7 @@ typedef void usart_callback_t(u8 ch, u8 status);
 void UART_StartReceive(usart_callback_t isr_callback);
 void UART_StopReceive();
 void UART_SetDuplex(uart_duplex duplex);
+void UART_SendByte(u8 x);
 typedef void sser_callback_t(u8 data);
 void SSER_StartReceive(sser_callback_t isr_callback);
 void SSER_Initialize();
@@ -243,13 +295,14 @@ void MSC_Enable();
 void MSC_Disable();
 
 /* Filesystem */
+int FS_Init();
 int FS_Mount(void *FAT, const char *drive);
 void FS_Unmount();
 int FS_OpenDir(const char *path);
 int FS_ReadDir(char *path);
 void FS_CloseDir();
 
-MODULE_CALLTYPE void _usleep(u32 usec);
+void _usleep(u32 usec);
 void _msleep(u32 msec);
 #define usleep _usleep
 
@@ -266,8 +319,8 @@ u8 *BOOTLOADER_Read(int idx);
 //Ensure functions are loaded for protocol modules
 void SPI_ProtoInit();
 void SPI_AVRProgramInit();
-MODULE_CALLTYPE int SPI_ConfigSwitch(unsigned csn_high, unsigned csn_low);
-MODULE_CALLTYPE int SPI_ProtoGetPinConfig(int module, int state);
+int SPI_ConfigSwitch(unsigned csn_high, unsigned csn_low);
+int SPI_ProtoGetPinConfig(int module, int state);
 u32 AVR_StartProgram();
 int AVR_Erase();
 int AVR_Program(u32 address, u8 *data, int pagesize);
@@ -280,7 +333,7 @@ struct mcu_pin;
 void MCU_InitModules();
 int MCU_SetPin(struct mcu_pin *, const char *name);
 const char *MCU_GetPinName(char *str, struct mcu_pin *);
-MODULE_CALLTYPE void MCU_SerialNumber(u8 *var, int len);
+void MCU_SerialNumber(u8 *var, int len);
 
 #if defined HAS_4IN1_FLASH && HAS_4IN1_FLASH
 void SPISwitch_Init();

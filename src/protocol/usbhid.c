@@ -13,20 +13,11 @@
  along with Deviation.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef MODULAR
-  //Allows the linker to properly relocate
-  #define USBHID_Cmds PROTO_Cmds
-  #pragma long_calls
-#endif
-
 #include "common.h"
 #include "interface.h"
 #include "mixer.h"
 #include "config/model.h"
 
-#ifdef MODULAR
-  #pragma long_calls_off
-#endif
 //To change USBHID_MAX_CHANNELS you must change the Report_Descriptor in hid_usb_desc.c as well
 #define USBHID_ANALOG_CHANNELS 8
 #define USBHID_DIGITAL_CHANNELS 4
@@ -38,8 +29,7 @@
 //if sizeof(packet) changes, must change wMaxPacketSize to match in Joystick_ConfigDescriptor
 static s8 packet[USBHID_ANALOG_CHANNELS + 1];
 static u8 num_channels;
-volatile u8 PrevXferComplete;
-extern void HID_Write(s8 *packet, u8 num_channels);
+extern void HID_Write(s8 *packet, u8 size);
 
 static void build_data_pkt()
 {
@@ -69,19 +59,23 @@ static void build_data_pkt()
 
 static u16 usbhid_cb()
 {
-    if(PrevXferComplete) {
-        build_data_pkt();
+    build_data_pkt();
         
-        HID_Write(packet, sizeof(packet));
-    }
+    HID_Write(packet, USBHID_DIGITAL_CHANNELS + 1);
+
     return 50000;
+}
+
+static void deinit()
+{
+    CLOCK_StopTimer();
+    HID_Disable();
 }
 
 static void initialize()
 {
     CLOCK_StopTimer();
     num_channels = Model.num_channels;
-    PrevXferComplete = 1;
     HID_Enable();
     CLOCK_StartTimer(1000, usbhid_cb);
 }
@@ -90,9 +84,9 @@ uintptr_t USBHID_Cmds(enum ProtoCmds cmd)
 {
     switch(cmd) {
         case PROTOCMD_INIT:  initialize(); return 0;
-        case PROTOCMD_DEINIT: HID_Disable(); return 0;
+        case PROTOCMD_DEINIT: deinit(); return 0;
         case PROTOCMD_CHECK_AUTOBIND: return 1;
-        case PROTOCMD_BIND:  initialize(); return 0;
+        case PROTOCMD_BIND: return 0;
         case PROTOCMD_NUMCHAN: return USBHID_MAX_CHANNELS;
         case PROTOCMD_DEFAULT_NUMCHAN: return 6;
         case PROTOCMD_CHANNELMAP: return UNCHG;

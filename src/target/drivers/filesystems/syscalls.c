@@ -26,13 +26,18 @@
 
 #if ! defined(EMULATOR) || EMULATOR == USE_INTERNAL_FS
 extern void printstr(char *, int);
-//#define dbgprintf(args...) printf(args)
-#define dbgprintf(args...) 
+
+#define DEBUG_SYSCALLS 0
+// #define DEBUG_SYSCALLS 1
+#define dbgprintf(args...) if (DEBUG_SYSCALLS) printf(args)
+#define dbgMsec()          ((DEBUG_SYSCALLS) ? CLOCK_getms() : 0)
+
 static DIR   dir;
+
 #ifdef MEDIA_DRIVE
-static FATFS fat[2];
+static DRIVE drive[2];
 #else
-static FATFS fat[1];
+static DRIVE drive[1];
 #endif
 
 extern u8 _drive_num;
@@ -42,31 +47,33 @@ extern void init_err_handler();
 int FS_Mount();
 void FS_Unmount();
 
-long _open_r (FATFS *r, const char *file, int flags, int mode);
-int _close_r (FATFS *r);
+intptr_t _open_r(FSHANDLE *r, const char *file, int flags, int mode);
+int _close_r(FSHANDLE *r);
 
 
-int _read_r (FATFS *r, char * ptr, int len);
-int _write_r (FATFS *r, char * ptr, int len);
-int _lseek_r (FATFS *r, int ptr, int dir);
+int _read_r(FSHANDLE *r, char * ptr, int len);
+int _write_r(FSHANDLE *r, char * ptr, int len);
+int _lseek_r(FSHANDLE *r, int ptr, int dir);
 
+
+int FS_Init()
+{
+#ifdef MEDIA_DRIVE
+    int res = (FS_Mount(&drive[0].fat, "")  && FS_Mount(&drive[1].fat, "media"));
+#else 
+    int res = FS_Mount(&drive[0].fat, "");
+#endif
+    if (res) {
+        init_err_handler();
+        fs_switchfile(&drive[0].fat);
+        return 1;
+    }
+    return 0;
+}
 
 int FS_Mount(void *_f, const char *drive)
 {
     (void)drive;
-    if(! _f) {
-#ifdef MEDIA_DRIVE
-        int res = (FS_Mount(&fat[0], "")  && FS_Mount(&fat[1], "media"));
-#else 
-        int res = FS_Mount(&fat[0], "");
-#endif
-        if (res) {
-            init_err_handler();
-            fs_switchfile(&fat[0]);
-            return 1;
-        }
-        return 0;
-    }
     FATFS *f = (FATFS *)_f;
     _drive_num = 0;
 #ifdef MEDIA_DRIVE
@@ -88,10 +95,10 @@ void FS_Unmount()
 
 int FS_OpenDir(const char *path)
 {
-    FATFS *ptr = &fat[0];
+    FATFS *ptr = &drive[0].fat;
 #ifdef MEDIA_DRIVE
     if (strncmp(path, "media", 5) == 0) {
-        ptr = &fat[1];
+        ptr = &drive[1].fat;
     }
 #endif
     fs_switchfile(ptr);
@@ -109,7 +116,9 @@ int FS_OpenDir(const char *path)
 int FS_ReadDir(char *path)
 {
     FILINFO fi;
-    if (fs_readdir(&dir, &fi) != FR_OK || ! fi.fname[0])
+    int res = fs_readdir(&dir, &fi);
+    dbgprintf("ReadDir: %d\n", res);
+    if (res != FR_OK || !fi.fname[0])
         return 0;
     dbgprintf("Read: %s %d\n", fi.fname, fi.fattrib);
     strlcpy(path, fi.fname, 13);
@@ -120,30 +129,30 @@ void FS_CloseDir()
 {
 }
 
-long _open_r (FATFS *r, const char *file, int flags, int mode) {
+intptr_t _open_r(FSHANDLE *r, const char *file, int flags, int mode) {
     (void)flags;
     (void)mode;
 
     if(!r) {
 #ifdef MEDIA_DRIVE
         if (strncmp(file, "media/", 6) == 0)
-            r = &fat[1];
+            r = (FSHANDLE *)&drive[1].fil;
         else
 #endif
-            r = &fat[0];
+            r = (FSHANDLE *)&drive[0].fil;
     }
     if(fs_is_open(r)) {
-        dbgprintf("_open_r(%p): file already open.\n", r);
+        dbgprintf("_open_r(%08lx): file already open.\n", r);
         return -1;
     } else {
         fs_switchfile(r);
         _drive_num = fs_get_drive_num(r);
-        int res=fs_open(file, flags);
-        if(res==FR_OK) {
+        int res = fs_open(r, file, flags, mode);
+        if (res == FR_OK) {
             dbgprintf("_open_r(%08lx): fs_open (%s) flags: %d, mode: %d ok\r\n", r, file, flags, mode);
             if (flags & O_CREAT)
                 fs_maximize_file_size();
-            return (long)r;
+            return (intptr_t)r;
         } else {
             dbgprintf("_open_r(%08lx): fs_open (%s) failed: %d\r\n", r, file, res);
             return -1;
@@ -151,76 +160,77 @@ long _open_r (FATFS *r, const char *file, int flags, int mode) {
     }
 }
 
-int _close_r (FATFS *r) {
+int _close_r(FSHANDLE *r) {
     if(r) {
-       fs_close(r);
-       dbgprintf("_close_r(%p): file closed.\r\n", r);
+       int res = fs_close(r);
+       dbgprintf("_close_r(%08lx): ret (%d) file_still_open: %08lx.\r\n", r, res, fs_is_open(r));
     }
     return 0;
 }
 
-int _read_r (FATFS *r, char * ptr, int len)
+int _read_r(FSHANDLE *r, char * ptr, int len)
 {
     if((unsigned long)r>2 && fs_is_open(r)) {
         if(len <= 0xffff) {
-            u16  bytes_read;
+            unsigned  bytes_read = 0;
             fs_switchfile(r);
             _drive_num = fs_get_drive_num(r);
-            int res=fs_read(ptr, len, &bytes_read);
-            dbgprintf("_read_r: len %d, bytes_read %d, result %d\r\n", len, bytes_read, res); 
-            if(res==FR_OK) return bytes_read;
+            uint32_t start = dbgMsec();
+            int res = fs_read(r, ptr, len, &bytes_read);
+            dbgprintf("_read_r(%08lx): len %d, bytes_read %d, result %d time: %d\r\n", r, len, bytes_read, res, dbgMsec() - start);
+            if (res == FR_OK) return bytes_read;
         }
     }    
 
-    errno=EINVAL;
+    errno = EINVAL;
     return -1;
 }
 
-int _write_r (FATFS *r, char * ptr, int len)
+int _write_r(FSHANDLE *r, char * ptr, int len)
 {  
     if((unsigned long)r==1 || (unsigned long)r==2) {
         printstr(ptr, len);
         return len;
     } else if(r) {
         if(fs_is_open(r)) {
-            u16 bytes_written;
+            unsigned bytes_written = 0;
             fs_switchfile(r);
             _drive_num = fs_get_drive_num(r);
-            int res=fs_write(ptr, len, &bytes_written);
+            int res = fs_write(r, ptr, len, &bytes_written);
             dbgprintf("_write_r: len %d, bytes_written %d, result %d\r\n",len, bytes_written, res);
-            if(res==FR_OK) return bytes_written;
+            if (res == FR_OK) return bytes_written;
         }
     }
-    errno=EINVAL;
+    errno = EINVAL;
     return -1;
 }
 
-long _ltell_r (FATFS *r)
+int _ltell_r(FSHANDLE *r)
 {
-    if((unsigned long)r>2 && fs_is_open(r)) {
-        return fs_ltell(r);
+    if ((intptr_t)r > 2 && fs_is_open(r)) {
+        return (int)fs_ltell(r);
     }
     return -1;
 }
 
-int _lseek_r (FATFS *r, int ptr, int dir)
+int _lseek_r(FSHANDLE *r, int ptr, int dir)
 {
     (void)r;
     
-    if((unsigned long)r>2 && fs_is_open(r)) {
-        if(dir==SEEK_CUR) {
+    if ((intptr_t)r > 2 && fs_is_open(r)) {
+        if (dir == SEEK_CUR) {
             ptr += fs_ltell(r);
-        } else if (dir==SEEK_END) {
+        } else if (dir == SEEK_END) {
             ptr += fs_filesize(r);
         }
         fs_switchfile(r);
         _drive_num = fs_get_drive_num(r);
-        int res=fs_lseek(ptr);
-        if(res==FR_OK) {
+        int res = fs_lseek(r, ptr);
+        if (res == FR_OK) {
            return fs_ltell(r);
         }
     }
-    errno=EINVAL;
+    errno = EINVAL;
     return -1;
 }
-#endif //! defined(EMULATOR) || EMULATOR == USE_INTERNAL_FS
+#endif  // !defined(EMULATOR) || EMULATOR == USE_INTERNAL_FS

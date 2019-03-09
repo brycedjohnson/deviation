@@ -13,11 +13,6 @@
  along with Deviation.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef MODULAR
-  //Allows the linker to properly relocate
-  #define FRSKYX_Cmds PROTO_Cmds
-  #pragma long_calls
-#endif
 #include "common.h"
 #include "interface.h"
 #include "mixer.h"
@@ -25,16 +20,7 @@
 #include "config/tx.h"
 #include "telemetry.h"
 
-#ifdef MODULAR
-  //Some versions of gcc applythis to definitions, others to calls
-  //So just use long_calls everywhere
-  //#pragma long_calls_off
-#endif
-
 #ifdef PROTO_HAS_CC2500
-
-#include "iface_cc2500.h"
-
 
 static const char * const frskyx_opts[] = {
   _tr_noop("Failsafe"), "Hold", "NoPulse", "RX", NULL,
@@ -333,8 +319,8 @@ static void setup_serial_port() {
     if ( Model.proto_opts[PROTO_OPTS_SPORTOUT] ) {
         UART_SetDataRate(57600);    // set for s.port compatibility
 #if HAS_EXTENDED_AUDIO
-#if HAS_AUDIO_UART5
-        if (Transmitter.audio_uart5) return;
+#if HAS_AUDIO_UART
+        if (Transmitter.audio_uart) return;
 #endif
         Transmitter.audio_player = AUDIO_DISABLED; // disable voice commands on serial port
 #endif

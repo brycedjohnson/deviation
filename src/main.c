@@ -54,11 +54,11 @@ int main() {
     ADC_ScanChannels(); while(1);
 #endif
     u32 buttons = ScanButtons();
-    if(CHAN_ButtonIsPressed(buttons, BUT_ENTER) || !FS_Mount(NULL, NULL)) {
+    if (CHAN_ButtonIsPressed(buttons, BUT_ENTER) || !FS_Init()) {
         LCD_DrawUSBLogo(LCD_WIDTH, LCD_HEIGHT);
         USB_Connect();
         LCD_Clear(0x0000);
-        FS_Mount(NULL, NULL);
+        FS_Init();
     }
 
     CONFIG_LoadTx();
@@ -128,13 +128,14 @@ int main() {
 #define SPI_BOOTLOADER 1
 int main() {
     PWR_Init();
+    LED_Init();
     CLOCK_Init();
     UART_Initialize();
     if(PWR_CheckPowerSwitch()) PWR_Shutdown();
 #if SPI_BOOTLOADER
     Initialize_ButtonMatrix();
-    SPIFlash_Init(); //This must come before LCD_Init() for 7e
-    SPI_FlashBlockWriteEnable(1); //Enable writing to all banks of SPIFlash
+    STORAGE_Init();  // This must come before LCD_Init() for 7e
+    STORAGE_WriteEnable(1);  // Enable writing to all banks of storage
     LCD_Init();
     LCD_Clear(0x0000);
     BACKLIGHT_Init();
@@ -150,11 +151,16 @@ int main() {
 
 void Init() {
     PWR_Init();
+    LED_Init();
     CLOCK_Init();
     UART_Initialize();
     printf("Start\n");
     Initialize_ButtonMatrix();
-    SPIFlash_Init(); //This must come before LCD_Init() for 7e
+    STORAGE_Init();  // This must come before LCD_Init() for 7e
+
+#ifdef MEDIA_DRIVE
+    MEDIA_Init();
+#endif
 
     LCD_Init();
     CHAN_Init();
@@ -164,7 +170,7 @@ void Init() {
     BACKLIGHT_Init();
     BACKLIGHT_Brightness(1);
     AUTODIMMER_Init();
-    SPI_FlashBlockWriteEnable(1); //Enable writing to all banks of SPIFlash
+    STORAGE_WriteEnable(1);  // Enable writing to all banks of storage
 
     PPMin_TIM_Init();
 #ifdef ENABLE_MODULAR
@@ -189,7 +195,7 @@ void Banner()
 
     printf("BootLoader    : '%s'\n",tmp);
     printf("Power         : '%s'\n",Power == CYRF_PWR_100MW ? "100mW" : "10mW" );
-    printf("SPI Flash     : '%X'\n",(unsigned int)SPIFlash_ReadID());
+    printf("SPI Flash     : '%X'\n", STORAGE_ReadID());
     CYRF_GetMfgData(mfgdata);
     printf("CYRF Mfg Data : '%02X %02X %02X %02X %02X %02X'\n",
             mfgdata[0],
@@ -217,7 +223,7 @@ void EventLoop()
     debug_timing(0, 0);
 #endif
     priority_ready &= ~(1 << MEDIUM_PRIORITY);
-#if !defined(HAS_HARD_POWER_OFF) || !HAS_HARD_POWER_OFF
+#if !HAS_HARD_POWER_OFF
     if(PWR_CheckPowerSwitch()) {
         if(! (BATTERY_Check() & BATTERY_CRITICAL)) {
             PAGE_Test();
@@ -228,7 +234,10 @@ void EventLoop()
 #if HAS_EXTENDED_AUDIO
         if(AUDIO_VoiceAvailable()) {
             MUSIC_Play(MUSIC_SHUTDOWN);
-            while (CLOCK_getms()<audio_queue_time); // Wait for voice to finished
+            while (CLOCK_getms() < audio_queue_time) {
+                // Wait for voice to finished
+                CLOCK_ResetWatchdog();
+            }
         } else {
 #else
         {
@@ -236,7 +245,9 @@ void EventLoop()
             unsigned int time;
             MUSIC_Play(MUSIC_SHUTDOWN);
             time = CLOCK_getms()+700;
-            while(CLOCK_getms()<time);
+            while (CLOCK_getms() < time) {
+                CLOCK_ResetWatchdog();
+            }
 #endif
         }
 	}
@@ -266,7 +277,7 @@ void EventLoop()
         AUDIO_CheckQueue();
 #endif
         GUI_RefreshScreen();
-#if defined(HAS_HARD_POWER_OFF) && HAS_HARD_POWER_OFF
+#if HAS_HARD_POWER_OFF
         if (PAGE_ModelDoneEditing())
             CONFIG_SaveModelIfNeeded();
         CONFIG_SaveTxIfNeeded();

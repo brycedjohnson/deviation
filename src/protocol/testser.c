@@ -13,21 +13,11 @@
  along with Deviation.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef MODULAR
-  //Allows the linker to properly relocate
-  #define TESTSER_Cmds PROTO_Cmds
-  #pragma long_calls
-#endif
-
 #include "common.h"
 #include "interface.h"
 #include "mixer.h"
 #include "config/model.h"
 #include "config/tx.h"
-
-#ifdef MODULAR
-  #pragma long_calls_off
-#endif
 
 #define TESTSER_PACKET_SIZE 64
 static u8 packet[TESTSER_PACKET_SIZE];
@@ -136,8 +126,8 @@ static void initialize()
         return;
     }
 #if HAS_EXTENDED_AUDIO
-#if HAS_AUDIO_UART5
-    if (!Transmitter.audio_uart5)
+#if HAS_AUDIO_UART
+    if (!Transmitter.audio_uart)
 #endif
     Transmitter.audio_player = AUDIO_DISABLED; // disable voice commands on serial port
 #endif

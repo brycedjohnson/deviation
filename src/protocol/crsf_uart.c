@@ -13,12 +13,6 @@
  along with Deviation.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef MODULAR
-  //Allows the linker to properly relocate
-  #define CRSF_Cmds PROTO_Cmds
-  #pragma long_calls
-#endif
-
 #include "common.h"
 #include "interface.h"
 #include "mixer.h"
@@ -26,10 +20,6 @@
 #include "config/tx.h"
 #if HAS_EXTENDED_TELEMETRY
 #include "telemetry.h"
-#endif
-
-#ifdef MODULAR
-  #pragma long_calls_off
 #endif
 
 #define CRSF_DATARATE             400000
@@ -157,7 +147,9 @@ static void processCrossfireTelemetryFrame()
       for (i=1; i <= TELEM_CRSF_TX_SNR; i++) {
         if (getCrossfireTelemetryValue(2+i, &value, 1)) {   // payload starts at third byte of rx packet
           if (i == TELEM_CRSF_TX_POWER) {
-            static const s32 power_values[] = { 0, 10, 25, 100, 500, 1000, 2000 };
+            static const s32 power_values[] = { 0, 10, 25, 100, 500, 1000, 2000, 250 };
+            if ((u8)value >= (sizeof power_values / sizeof (s32)))
+              continue;
             value = power_values[value];
           }
           set_telemetry(i, value);
@@ -329,8 +321,8 @@ static void initialize()
         return;
     }
 #if HAS_EXTENDED_AUDIO
-#if HAS_AUDIO_UART5
-    if (!Transmitter.audio_uart5)
+#if HAS_AUDIO_UART
+    if (!Transmitter.audio_uart)
 #endif
     Transmitter.audio_player = AUDIO_DISABLED; // disable voice commands on serial port
 #endif

@@ -22,7 +22,7 @@ static const char *swash_val_cb(guiObject_t *obj, int dir, void *data)
     (void)obj;
     (void)data;
     Model.swash_type = GUI_TextSelectHelper(Model.swash_type, 0 , SWASH_TYPE_90, dir, 1, 1, NULL);
-    return MIXER_SwashType(Model.swash_type);
+    return _tr(MIXER_SwashType(Model.swash_type));
 }
 
 static const char *swashinv_val_cb(guiObject_t *obj, int dir, void *data)
@@ -90,7 +90,7 @@ static const char *proto_opt_cb(guiObject_t *obj, int dir, void *data)
 
     } else {
         Model.proto_opts[idx] = GUI_TextSelectHelper(Model.proto_opts[idx], 0, count-1, dir, 1, 1, &changed);
-        snprintf(tempstring, sizeof(tempstring), "%s", _tr(proto_strs[pos+Model.proto_opts[idx]+1]));
+        tempstring_cpy(_tr(proto_strs[pos+Model.proto_opts[idx]+1]));
     }
     if (changed)
         PROTOCOL_SetOptions();  // for devo, it needs to do protocol init as the telemerty state is changed
