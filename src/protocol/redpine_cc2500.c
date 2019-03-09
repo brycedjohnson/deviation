@@ -13,11 +13,6 @@
  along with Deviation.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef MODULAR
-  // Allows the linker to properly relocate
-  #define REDPINE_Cmds PROTO_Cmds
-  #pragma long_calls
-#endif
 #include "common.h"
 #include "interface.h"
 #include "mixer.h"
@@ -25,15 +20,7 @@
 #include "config/tx.h"
 #include "telemetry.h"
 
-#ifdef MODULAR
-  // Some versions of gcc applythis to definitions, others to calls
-  // So just use long_calls everywhere
-  // #pragma long_calls_off
-#endif
-
 #ifdef PROTO_HAS_CC2500
-
-#include "iface_cc2500.h"
 
 static void initialize(int bind);
 static void redpine_init(unsigned int format);
@@ -83,8 +70,7 @@ static u16 mixer_runtime;
 
 static u8 hop_data[NUM_HOPS];
 
-unsigned format = 1; //todo: use enum
-
+unsigned format = 1;  // todo: use enum
 
 static const u16 CRCTable[] = {
   0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf,
@@ -131,7 +117,7 @@ static u16 crc(u8 *data, u8 len)
 
 static void initialize_data(u8 adr)
 {
-    CC2500_WriteReg(CC2500_0C_FSCTRL0, fine); // Frequency offset hack
+    CC2500_WriteReg(CC2500_0C_FSCTRL0, fine);  // Frequency offset hack
     CC2500_WriteReg(CC2500_18_MCSM0, 0x8);
     CC2500_WriteReg(CC2500_09_ADDR, adr ? 0x03 : (fixed_id & 0xff));
     CC2500_WriteReg(CC2500_07_PKTCTRL1, 0x05);
@@ -178,7 +164,7 @@ static u16 scaleForRedpine(u8 chan)
     s32 chan_val;
 
     chan_val = Channels[chan] * 15 * 100 / (2 * CHAN_MAX_VALUE) + 1024;
-    
+
     if (chan_val > 2046)   chan_val = 2046;
     else if (chan_val < 1) chan_val = 1;
 
@@ -244,7 +230,7 @@ static void redpine_data_frame() {
     } else {
         packet[10] = Model.proto_opts[PROTO_OPTS_LOOPTIME_SLOW];
     }
-    
+
     packet[11] = mixer_runtime/10;
 
     u16 lcrc = crc(&packet[0], 12);
@@ -305,8 +291,8 @@ break;
         set_start(channr);
         CC2500_SetPower(Model.tx_power);
         CC2500_Strobe(CC2500_SFRX);
-        if (mixer_sync != MIX_DONE && mixer_runtime < 2000) { 
-            mixer_runtime += 1; 
+        if (mixer_sync != MIX_DONE && mixer_runtime < 2000) {
+            mixer_runtime += 1;
         }
         redpine_data_frame();
         CC2500_Strobe(CC2500_SIDLE);
@@ -333,13 +319,13 @@ break;
 // register, fast 250k, slow
 static const u8 init_data[][3] = {
     {CC2500_00_IOCFG2,    0x06, 0x06},
-    {CC2500_02_IOCFG0,    0x06, 0x06},    
+    {CC2500_02_IOCFG0,    0x06, 0x06},
     {CC2500_03_FIFOTHR,   0x07, 0x07},
-    {CC2500_06_PKTLEN,    0x1E, 0x1E},  
+    {CC2500_06_PKTLEN,    0x1E, 0x1E},
     {CC2500_07_PKTCTRL1,  0x04, 0x04},
-    {CC2500_08_PKTCTRL0,  0x01, 0x01},      
+    {CC2500_08_PKTCTRL0,  0x01, 0x01},
     {CC2500_09_ADDR,      0x00, 0x00},
-    {CC2500_0B_FSCTRL1,   0x0A, 0x0A},    
+    {CC2500_0B_FSCTRL1,   0x0A, 0x0A},
     {CC2500_0C_FSCTRL0,   0x00, 0x00},
     {CC2500_0D_FREQ2,     0x5D, 0x5c},
     {CC2500_0E_FREQ1,     0x93, 0x76},
@@ -348,21 +334,21 @@ static const u8 init_data[][3] = {
     {CC2500_11_MDMCFG3,   0x3B, 0x61},
     {CC2500_12_MDMCFG2,   0x73, 0x13},
     {CC2500_13_MDMCFG1,   0x23, 0x23},
-    {CC2500_14_MDMCFG0,   0x56, 0x7a}, //Chan space
-    {CC2500_15_DEVIATN,   0x00, 0x51},        
+    {CC2500_14_MDMCFG0,   0x56, 0x7a},  // Chan space
+    {CC2500_15_DEVIATN,   0x00, 0x51},
     {CC2500_17_MCSM1,     0x0c, 0x0c},
     {CC2500_18_MCSM0,     0x18, 0x18},
     {CC2500_19_FOCCFG,    0x1D, 0x16},
     {CC2500_1A_BSCFG,     0x1C, 0x6c},
     {CC2500_1B_AGCCTRL2,  0xC7, 0x43},
     {CC2500_1C_AGCCTRL1,  0x00, 0x40},
-    {CC2500_1D_AGCCTRL0,  0xB0, 0x91},   
-    {CC2500_21_FREND1,    0xB6, 0x56},  
+    {CC2500_1D_AGCCTRL0,  0xB0, 0x91},
+    {CC2500_21_FREND1,    0xB6, 0x56},
     {CC2500_22_FREND0,    0x10, 0x10},
-    {CC2500_23_FSCAL3,    0xEA, 0xA9},  
+    {CC2500_23_FSCAL3,    0xEA, 0xA9},
     {CC2500_24_FSCAL2,    0x0A, 0x0A},
     {CC2500_25_FSCAL1,    0x00, 0x00},
-    {CC2500_26_FSCAL0,    0x11, 0x11},           
+    {CC2500_26_FSCAL0,    0x11, 0x11},
     {CC2500_29_FSTEST,    0x59, 0x59},
     {CC2500_2C_TEST2,     0x88, 0x88},
     {CC2500_2D_TEST1,     0x31, 0x31},
@@ -426,7 +412,7 @@ static void initialize(int bind)
     channr = 0;
     ctr = 0;
 
-    //Used from kn_nrf24l01.c : kn_calculate_freqency_hopping_channels
+    // Used from kn_nrf24l01.c : kn_calculate_freqency_hopping_channels
     u32 idx = 0;
     u32 rnd = get_tx_id();
     #define MAX_RF_CHANNEL 255
@@ -448,7 +434,7 @@ static void initialize(int bind)
         }
         hop_data[idx++] = next_ch;
     }
-    hop_data[49] = 0;  //Last channel is the bind channel at hop 0
+    hop_data[49] = 0;  // Last channel is the bind channel at hop 0
 
     redpine_init(format);
 
