@@ -18,8 +18,11 @@ struct pagemem {
         struct range_page range_page;
         struct gyrosense_page gyrosense_page;
         struct switchassign_page switchassign_page;
-#if HAS_SCANNER
+#if SUPPORT_SCANNER
         struct scanner_page scanner_page;
+#endif
+#if SUPPORT_XN297DUMP
+        struct xn297dump_page xn297dump_page;
 #endif
 #if HAS_MUSIC_CONFIG
         struct voiceconfig_page voiceconfig_page;

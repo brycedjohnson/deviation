@@ -17,8 +17,8 @@ ALLTARGETS = $(filter-out common,$(notdir $(wildcard target/tx/*/*)))
 TXS ?= devo6 devo7e devo7e-256 devo8 devo10 devo12e devo12 devof7 devof7-XMS devof4 devof4-XMS devof12e devof12e-XMS at9 at10 t8sg t8sg_v2 t8sg_v2_plus ir8m
 
 #Filter non-existant emus
-EMUS = $(foreach dir,$(TXS:%=emu_%),$(if $(wildcard target/$(dir)),$(dir),))
-ALLEMUS = $(foreach dir,$(ALLTXS:%=emu_%),$(if $(wildcard target/$(dir)),$(dir),))
+EMUS = $(foreach dir,$(TXS:%=emu_%),$(if $(wildcard target/tx/*/$(dir)),$(dir),))
+ALLEMUS = $(foreach dir,$(ALLTXS:%=emu_%),$(if $(wildcard target/tx/*/$(dir)),$(dir),))
 
 txs: $(TXS)
 emus: $(EMUS)
@@ -222,7 +222,7 @@ distclean:
 	rm -rf deviation*.zip
 
 language:
-	../utils/extract_strings.pl -po > fs/language/deviation.po
+	CROSS=$(CROSS) ../utils/extract_strings.py -po > fs/language/deviation.po
 
 
 zip: $(TARGET).zip
@@ -309,7 +309,7 @@ $(LAST_MODEL): model_template.ini tx_template.ini $(FONTS) $(PRE_FS)
 	cp model_template.ini filesystem/$(FILESYSTEM)/models/default.ini
 ifdef LANGUAGE
 	mkdir filesystem/$(FILESYSTEM)/language 2> /dev/null; \
-               ../utils/extract_strings.pl -po -fs filesystem/$(FILESYSTEM)/language -targets $(LANGUAGE) -update -objdir $(ODIR)
+               CROSS=$(CROSS) ../utils/extract_strings.py -po -fs filesystem/$(FILESYSTEM)/language -targets $(LANGUAGE) -update -objdir $(ODIR)
 endif
 	export tx=$(FILESYSTEM); \
 	number=2 ; while [ $$number -le $(NUM_MODELS) ] ; do \
@@ -318,9 +318,9 @@ endif
 		done
 	@echo " + Checking string list length for $(FILESYSTEM)"
 ifeq "$(TYPE)" "dev"
-	../utils/check_string_size.pl -target $(FILESYSTEM) -objdir $(ODIR)
+	../utils/check_string_size.py -target $(FILESYSTEM) -objdir $(ODIR)
 else
-	../utils/check_string_size.pl -target $(FILESYSTEM) -objdir $(ODIR) -quiet
+	../utils/check_string_size.py -target $(FILESYSTEM) -objdir $(ODIR) -quiet
 endif
 	../utils/run_linter.py --diff --skip-github --no-fail
 

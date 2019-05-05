@@ -313,7 +313,7 @@ static void frskyX_data_frame() {
 #include "frsky_s_telem._c"
 
 static s8 telem_save_seq;
-static u8 telem_save_data[FRSKY_SPORT_PACKET_SIZE+1];
+static u8 telem_save_data[FRSKY_SPORT_PACKET_SIZE];
 
 static void setup_serial_port() {
     if ( Model.proto_opts[PROTO_OPTS_SPORTOUT] ) {
@@ -327,24 +327,14 @@ static void setup_serial_port() {
     }
 }
 
-static u8 sport_crc(u8 *data) {
-    u16 crc = 0;
-    for (int i=1; i < FRSKY_SPORT_PACKET_SIZE-1; ++i) {
-        crc += data[i];
-        crc += crc >> 8;
-        crc &= 0x00ff;
-    }
-    return 0x00ff - crc;
-}
-
 static void serial_echo(u8 *packet) {
-  static u8 outbuf[FRSKY_SPORT_PACKET_SIZE+2] = {0x7e};
+  static u8 outbuf[FRSKY_SPORT_PACKET_SIZE+1] = {0x7e};
 
   if (PPMin_Mode() || !Model.proto_opts[PROTO_OPTS_SPORTOUT]) return;
 
-  memcpy(outbuf+1, packet, FRSKY_SPORT_PACKET_SIZE);
-  outbuf[FRSKY_SPORT_PACKET_SIZE+1] = sport_crc(outbuf+2);
-  UART_Send(outbuf, FRSKY_SPORT_PACKET_SIZE+2);
+  memcpy(outbuf+1, packet, FRSKY_SPORT_PACKET_SIZE-1);
+  outbuf[FRSKY_SPORT_PACKET_SIZE] = sport_crc(outbuf+2);
+  UART_Send(outbuf, FRSKY_SPORT_PACKET_SIZE+1);
 }
 
 #endif // HAS_EXTENDED_TELEMETRY
@@ -703,13 +693,11 @@ uintptr_t FRSKYX_Cmds(enum ProtoCmds cmd)
             return PROTO_TELEM_ON;
         case PROTOCMD_TELEMETRYTYPE:
             return TELEM_FRSKY;
-        case PROTOCMD_TELEMETRYRESET:
 #if HAS_EXTENDED_TELEMETRY
-            Model.ground_level = 0;
-            discharge_dAms = 0;
-            Telemetry.value[TELEM_FRSKY_MIN_CELL] = TELEMETRY_GetMaxValue(TELEM_FRSKY_MIN_CELL);
-#endif
+        case PROTOCMD_TELEMETRYRESET:
+            frsky_telem_reset();
             return 0;
+#endif
         case PROTOCMD_RESET:
         case PROTOCMD_DEINIT:
 #if HAS_EXTENDED_TELEMETRY
