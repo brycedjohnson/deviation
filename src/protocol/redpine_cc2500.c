@@ -43,15 +43,15 @@ enum {
 };
 ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
 
-#define MAX_PACKET_SIZE 33
-
+#define PACKET_SIZE 11
+#define REDPINE_FEC true //from cc2500 datasheet: The convolutional coder is a rate 1/2 code with a constraint length of m=4
 #define NUM_HOPS 50
+
 // Statics are not initialized on 7e so in initialize() if necessary
 static u8 calData[NUM_HOPS][3];
 static u8 channr;
 static u8 ctr;
 static s8 fine;
-static u8 packet_size;
 
 static enum {
   REDPINE_BIND,
@@ -65,7 +65,7 @@ static enum {
 } state;
 
 static u16 fixed_id;
-static u8 packet[MAX_PACKET_SIZE];
+static u8 packet[PACKET_SIZE];
 static u16 mixer_runtime;
 
 static u8 hop_data[NUM_HOPS];
@@ -76,8 +76,9 @@ static void initialize_data(u8 adr)
 {
     CC2500_WriteReg(CC2500_0C_FSCTRL0, fine);  // Frequency offset hack
     CC2500_WriteReg(CC2500_18_MCSM0, 0x8);
-    CC2500_WriteReg(CC2500_09_ADDR, adr ? 0x03 : (fixed_id & 0xff));
-    CC2500_WriteReg(CC2500_07_PKTCTRL1, 0x05);
+    (void)(adr);
+    //CC2500_WriteReg(CC2500_09_ADDR, adr ? 0x03 : (fixed_id & 0xff));
+    //CC2500_WriteReg(CC2500_07_PKTCTRL1, 0x05);
 }
 
 static void set_start(u8 ch)
@@ -92,9 +93,9 @@ static void set_start(u8 ch)
 #define RXNUM 16
 static void redpine_build_bind_packet()
 {
-    memset(&packet[0], 0, packet_size);
+    memset(&packet[0], 0, PACKET_SIZE);
 
-    packet[0] = packet_size - 1;
+    packet[0] = PACKET_SIZE - 1;
     packet[1] = 0x03;
     packet[2] = 0x01;
     packet[3] = fixed_id;
@@ -106,8 +107,8 @@ static void redpine_build_bind_packet()
     packet[8] = hop_data[idx++];
     packet[9] = hop_data[idx++];
     packet[10] = hop_data[idx++];
-    packet[11] = 0x02;
-    packet[12] = RXNUM;
+    //packet[11] = 0x02;
+    //packet[12] = RXNUM;
 }
 
 static u16 scaleForRedpine(u8 chan)
@@ -148,9 +149,9 @@ enum {
 static void redpine_data_frame() {
     u16 chan[4];
 
-    memset(&packet[0], 0, packet_size);
+    memset(&packet[0], 0, PACKET_SIZE);
 
-    packet[0] = packet_size - 1 ;
+    packet[0] = PACKET_SIZE - 1;
     packet[1] = fixed_id;
     packet[2] = fixed_id >> 8;
 
@@ -179,9 +180,6 @@ static void redpine_data_frame() {
     } else {
         packet[10] = Model.proto_opts[PROTO_OPTS_LOOPTIME_SLOW];
     }
-
-    packet[11] = mixer_runtime/10;
-
 }
 
 static u16 redpine_cb() {
@@ -198,7 +196,7 @@ static u16 redpine_cb() {
         CC2500_Strobe(CC2500_SFRX);
         redpine_build_bind_packet();
         CC2500_Strobe(CC2500_SIDLE);
-        CC2500_WriteData(packet, packet_size);
+        CC2500_WriteData(packet, PACKET_SIZE);
         state++;
 #ifndef EMULATOR
         return 9000;
@@ -243,7 +241,7 @@ break;
         redpine_data_frame();
         CC2500_Strobe(CC2500_SIDLE);
         channr = (channr + 1) % 49;
-        CC2500_WriteData(packet, packet_size);
+        CC2500_WriteData(packet, PACKET_SIZE);
         state = REDPINE_DATAM;
 #ifndef EMULATOR
         if (Model.proto_opts[PROTO_OPTS_FORMAT] == 0) {
@@ -278,7 +276,11 @@ static const u8 init_data[][3] = {
     {CC2500_10_MDMCFG4,   0x2D, 0x7B},
     {CC2500_11_MDMCFG3,   0x3B, 0x61},
     {CC2500_12_MDMCFG2,   0x73, 0x13},
-    {CC2500_13_MDMCFG1,   0x23, 0x23},
+    #ifdef REDPINE_FEC    
+        {CC2500_13_MDMCFG1,   0xA3, 0xA3},
+    #else
+        {CC2500_13_MDMCFG1,   0x23, 0x23},
+    #endif
     {CC2500_14_MDMCFG0,   0x56, 0x7a},  // Chan space
     {CC2500_15_DEVIATN,   0x00, 0x51},
     {CC2500_17_MCSM1,     0x0c, 0x0c},
@@ -308,9 +310,9 @@ static const u8 init_data_shared[][2] = {
 static void redpine_init(unsigned int format) {
   CC2500_Reset();
 
-  packet_size = 18; //Model.proto_opts[PROTO_OPTS_PACKETSIZE];
 
-  CC2500_WriteReg(CC2500_06_PKTLEN, packet_size);
+
+  CC2500_WriteReg(CC2500_06_PKTLEN, PACKET_SIZE);
 
   for (unsigned i=0; i < ((sizeof init_data) / (sizeof init_data[0])); i++) {
       CC2500_WriteReg(init_data[i][0], init_data[i][format+1]);
