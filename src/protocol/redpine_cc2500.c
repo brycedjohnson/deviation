@@ -175,11 +175,8 @@ static void redpine_data_frame() {
             | GET_FLAG(CHANNEL15, 0x40)
             | GET_FLAG(CHANNEL16, 0x80);
 
-    if (Model.proto_opts[PROTO_OPTS_FORMAT] == 0) {
-        packet[10] = Model.proto_opts[PROTO_OPTS_LOOPTIME_FAST];
-    } else {
-        packet[10] = Model.proto_opts[PROTO_OPTS_LOOPTIME_SLOW];
-    }
+    packet[10] = Model.proto_opts[PROTO_OPTS_LOOPTIME_FAST];
+
 }
 
 static u16 redpine_cb() {
@@ -243,19 +240,7 @@ break;
         channr = (channr + 1) % 49;
         CC2500_WriteData(packet, PACKET_SIZE);
         state = REDPINE_DATAM;
-#ifndef EMULATOR
-        if (Model.proto_opts[PROTO_OPTS_FORMAT] == 0) {
-            return (Model.proto_opts[PROTO_OPTS_LOOPTIME_FAST]*100 - mixer_runtime);
-        } else {
-            return (Model.proto_opts[PROTO_OPTS_LOOPTIME_SLOW]*1000 - mixer_runtime);
-        }
-#else
-        if (Model.proto_opts[PROTO_OPTS_FORMAT] == 0) {
-            return (Model.proto_opts[PROTO_OPTS_LOOPTIME_FAST]);
-        } else {
-            return (Model.proto_opts[PROTO_OPTS_LOOPTIME_SLOW]);
-        }
-#endif
+        return (Model.proto_opts[PROTO_OPTS_LOOPTIME_FAST]*100 - mixer_runtime);
   }
   return 1;
 }
@@ -270,29 +255,25 @@ static const u8 init_data[][3] = {
     {CC2500_09_ADDR,      0x00, 0x00},
     {CC2500_0B_FSCTRL1,   0x0A, 0x0A},
     {CC2500_0C_FSCTRL0,   0x00, 0x00},
-    {CC2500_0D_FREQ2,     0x5D, 0x5c},
-    {CC2500_0E_FREQ1,     0x93, 0x76},
-    {CC2500_0F_FREQ0,     0xB1, 0x27},
-    {CC2500_10_MDMCFG4,   0x2D, 0x7B},
-    {CC2500_11_MDMCFG3,   0x3B, 0x61},
-    {CC2500_12_MDMCFG2,   0x73, 0x13},
-    #ifdef REDPINE_FEC    
-        {CC2500_13_MDMCFG1,   0xA3, 0xA3},
-    #else
-        {CC2500_13_MDMCFG1,   0x23, 0x23},
-    #endif
-    {CC2500_14_MDMCFG0,   0x56, 0x7a},  // Chan space
-    {CC2500_15_DEVIATN,   0x00, 0x51},
+    {CC2500_0D_FREQ2,     0x5D, 0x5D},
+    {CC2500_0E_FREQ1,     0x93, 0x93},
+    {CC2500_0F_FREQ0,     0xB1, 0xB1},
+    {CC2500_10_MDMCFG4,   0x2D, 0x2D},
+    {CC2500_11_MDMCFG3,   0x3B, 0x3B},
+    {CC2500_12_MDMCFG2,   0x73, 0x73},
+    {CC2500_13_MDMCFG1,   0x23, 0xA3},
+    {CC2500_14_MDMCFG0,   0x56, 0x56},  // Chan space
+    {CC2500_15_DEVIATN,   0x00, 0x00},
     {CC2500_17_MCSM1,     0x0c, 0x0c},
     {CC2500_18_MCSM0,     0x18, 0x18},
-    {CC2500_19_FOCCFG,    0x1D, 0x16},
-    {CC2500_1A_BSCFG,     0x1C, 0x6c},
-    {CC2500_1B_AGCCTRL2,  0xC7, 0x43},
-    {CC2500_1C_AGCCTRL1,  0x00, 0x40},
-    {CC2500_1D_AGCCTRL0,  0xB0, 0x91},
-    {CC2500_21_FREND1,    0xB6, 0x56},
+    {CC2500_19_FOCCFG,    0x1D, 0x1D},
+    {CC2500_1A_BSCFG,     0x1C, 0x1C},
+    {CC2500_1B_AGCCTRL2,  0xC7, 0xC7},
+    {CC2500_1C_AGCCTRL1,  0x00, 0x00},
+    {CC2500_1D_AGCCTRL0,  0xB0, 0xB0},
+    {CC2500_21_FREND1,    0xB6, 0xB6},
     {CC2500_22_FREND0,    0x10, 0x10},
-    {CC2500_23_FSCAL3,    0xEA, 0xA9},
+    {CC2500_23_FSCAL3,    0xEA, 0xEA},
     {CC2500_24_FSCAL2,    0x0A, 0x0A},
     {CC2500_25_FSCAL1,    0x00, 0x00},
     {CC2500_26_FSCAL0,    0x11, 0x11},
@@ -309,8 +290,6 @@ static const u8 init_data_shared[][2] = {
 
 static void redpine_init(unsigned int format) {
   CC2500_Reset();
-
-
 
   CC2500_WriteReg(CC2500_06_PKTLEN, PACKET_SIZE);
 
