@@ -26,25 +26,31 @@ static void initialize(int bind);
 static void redpine_init(unsigned int format);
 
 static const char * const redpine_opts[] = {
-  _tr_noop("Freq-Fine"),  "-127", "127", NULL,
   _tr_noop("Format"),  "Fast", "Slow", NULL,
   _tr_noop("Fast .1ms"),  "1", "250", NULL,
   _tr_noop("Slow 1ms"),  "1", "250", NULL,
   _tr_noop("PacketSize"),  "14", "100", NULL,
+  _tr_noop("VTX Band"),  "A", "B", "E", "F", "R",  NULL,
+  _tr_noop("VTX Channel"),  "1", "8", NULL,
+  _tr_noop("VTX Power"),  "0", "4", NULL,
+  _tr_noop("VTX Send"),  "OFF", "ON", NULL,
   NULL
 };
 enum {
-    PROTO_OPTS_FREQFINE,
     PROTO_OPTS_FORMAT,
     PROTO_OPTS_LOOPTIME_FAST,
     PROTO_OPTS_LOOPTIME_SLOW,
     PROTO_OPTS_PACKETSIZE,
+    PROTO_OPTS_VTX_BAND,
+    PROTO_OPTS_VTX_CHANNEL,
+    PROTO_OPTS_VTX_POWER,
+    PROTO_OPTS_VTX_SEND,
     LAST_PROTO_OPT,
 };
 ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
 
 #define PACKET_SIZE 11
-#define REDPINE_FEC true //from cc2500 datasheet: The convolutional coder is a rate 1/2 code with a constraint length of m=4
+#define REDPINE_FEC true  // from cc2500 datasheet: The convolutional coder is a rate 1/2 code with a constraint length of m=4
 #define NUM_HOPS 50
 
 // Statics are not initialized on 7e so in initialize() if necessary
@@ -77,8 +83,8 @@ static void initialize_data(u8 adr)
     CC2500_WriteReg(CC2500_0C_FSCTRL0, fine);  // Frequency offset hack
     CC2500_WriteReg(CC2500_18_MCSM0, 0x8);
     (void)(adr);
-    //CC2500_WriteReg(CC2500_09_ADDR, adr ? 0x03 : (fixed_id & 0xff));
-    //CC2500_WriteReg(CC2500_07_PKTCTRL1, 0x05);
+    // CC2500_WriteReg(CC2500_09_ADDR, adr ? 0x03 : (fixed_id & 0xff));
+    // CC2500_WriteReg(CC2500_07_PKTCTRL1, 0x05);
 }
 
 static void set_start(u8 ch)
@@ -107,8 +113,8 @@ static void redpine_build_bind_packet()
     packet[8] = hop_data[idx++];
     packet[9] = hop_data[idx++];
     packet[10] = hop_data[idx++];
-    //packet[11] = 0x02;
-    //packet[12] = RXNUM;
+    // packet[11] = 0x02;
+    // packet[12] = RXNUM;
 }
 
 static u16 scaleForRedpine(u8 chan)
@@ -118,7 +124,7 @@ static u16 scaleForRedpine(u8 chan)
     chan_val = Channels[chan] * 15 * 100 / (2 * CHAN_MAX_VALUE) + 1024;
 
     if (chan_val > 2046)   chan_val = 2046;
-    else if (chan_val < 1) chan_val = 1;
+    else if (chan_val < 10) chan_val = 10;
 
     return chan_val;
 }
@@ -179,6 +185,31 @@ static void redpine_data_frame() {
 
 }
 
+static void redpine_vtx_frame() {
+    static u8 send_num = 0;
+
+    send_num++;
+    memset(&packet[0], 0, PACKET_SIZE);
+
+    packet[0] = PACKET_SIZE - 1;
+    packet[1] = fixed_id;
+    packet[2] = fixed_id >> 8;
+
+    packet[3] = 1;
+    packet[4] = 0;
+    packet[5] = Model.proto_opts[PROTO_OPTS_VTX_BAND];
+    packet[6] = Model.proto_opts[PROTO_OPTS_VTX_CHANNEL];
+    packet[7] = Model.proto_opts[PROTO_OPTS_VTX_POWER];
+
+    packet[10] = Model.proto_opts[PROTO_OPTS_LOOPTIME_FAST];
+
+    if (send_num > 10) {
+        Model.proto_opts[PROTO_OPTS_VTX_SEND] = 0;
+        send_num = 0;
+    }
+}
+
+
 static u16 redpine_cb() {
   switch (state) {
     default:
@@ -217,10 +248,6 @@ break;
 #endif
 
     case REDPINE_DATA1:
-        if (fine != (s8)Model.proto_opts[PROTO_OPTS_FREQFINE]) {
-            fine = (s8)Model.proto_opts[PROTO_OPTS_FREQFINE];
-            CC2500_WriteReg(CC2500_0C_FSCTRL0, fine);
-        }
         if (format != (unsigned)Model.proto_opts[PROTO_OPTS_FORMAT]) {
             format = (unsigned)Model.proto_opts[PROTO_OPTS_FORMAT];
             redpine_init(format);
@@ -235,7 +262,13 @@ break;
         if (mixer_sync != MIX_DONE && mixer_runtime < 2000) {
             mixer_runtime += 1;
         }
-        redpine_data_frame();
+
+        if ((unsigned)Model.proto_opts[PROTO_OPTS_VTX_SEND] == 0) {
+            redpine_data_frame();
+        } else {
+            redpine_vtx_frame();
+        }
+
         CC2500_Strobe(CC2500_SIDLE);
         channr = (channr + 1) % 49;
         CC2500_WriteData(packet, PACKET_SIZE);
@@ -337,7 +370,7 @@ static void initialize(int bind)
     mixer_runtime = 50;
 
     // initialize statics since 7e modules don't initialize
-    fine = Model.proto_opts[PROTO_OPTS_FREQFINE];
+    fine = 0;
     fixed_id = (u16) get_tx_id();
     channr = 0;
     ctr = 0;
@@ -402,6 +435,8 @@ uintptr_t REDPINE_Cmds(enum ProtoCmds cmd)
             if (!Model.proto_opts[PROTO_OPTS_LOOPTIME_SLOW]) {
                 Model.proto_opts[PROTO_OPTS_LOOPTIME_SLOW] = 9;  // if not set, default to no gain
             }
+            Model.proto_opts[PROTO_OPTS_VTX_SEND] = 0;  // if not set, default to no gain
+
             return (uintptr_t)redpine_opts;
         case PROTOCMD_RESET:
         case PROTOCMD_DEINIT:
