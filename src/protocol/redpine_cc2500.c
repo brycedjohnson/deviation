@@ -33,7 +33,7 @@ static const char * const redpine_opts[] = {
   _tr_noop("VTX Band"),  "A", "B", "E", "F", "R",  NULL,
   _tr_noop("VTX Channel"),  "1", "8", NULL,
   _tr_noop("VTX Power"),  "0", "4", NULL,
-  _tr_noop("VTX Send"),  "OFF", "ON", NULL,
+  _tr_noop("VTX Send"),  "OFF", "SENDING", NULL,
   NULL
 };
 enum {
@@ -50,7 +50,7 @@ enum {
 ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
 
 #define PACKET_SIZE 11
-#define REDPINE_FEC true  // from cc2500 datasheet: The convolutional coder is a rate 1/2 code with a constraint length of m=4
+#define REDPINE_FEC false  // from cc2500 datasheet: The convolutional coder is a rate 1/2 code with a constraint length of m=4
 #define NUM_HOPS 50
 
 // Statics are not initialized on 7e so in initialize() if necessary
@@ -206,7 +206,7 @@ static void redpine_vtx_frame() {
 
     packet[10] = Model.proto_opts[PROTO_OPTS_LOOPTIME_FAST];
 
-    if (send_num > 10) {
+    if (send_num > 20) {
         Model.proto_opts[PROTO_OPTS_VTX_SEND] = 0;
         send_num = 0;
     }
@@ -214,6 +214,7 @@ static void redpine_vtx_frame() {
 
 
 static u16 redpine_cb() {
+  static u8 status_send = 0;
   switch (state) {
     default:
         if (state == REDPINE_BIND) {
@@ -269,7 +270,14 @@ break;
         if ((unsigned)Model.proto_opts[PROTO_OPTS_VTX_SEND] == 0) {
             redpine_data_frame();
         } else {
-            redpine_vtx_frame();
+            if (status_send == 20) {
+                redpine_vtx_frame();
+                status_send = 0;
+            } else {
+                redpine_data_frame();
+                status_send++;
+            }
+            
         }
 
         CC2500_Strobe(CC2500_SIDLE);
